@@ -111,7 +111,9 @@ export const createStripeCheckoutSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { orderId: string; origin: string }) => d)
   .handler(async ({ data, context }) => {
-    const stripeKey = process.env["STRIPE_SECRET_KEY"] || process.env["VITE_STRIPE_SECRET_KEY"];
+    const stripeKey =
+      process.env["STRIPE_SECRET_KEY"] ||
+      process.env["VITE_STRIPE_SECRET_KEY"];
 
     const { data: order, error } = await context.supabase
       .from("orders")
@@ -125,15 +127,15 @@ export const createStripeCheckoutSession = createServerFn({ method: "POST" })
     const origin = new URL(data.origin).origin;
 
     if (!stripeKey) {
-      // Se a chave ainda não estiver configurada no ambiente, retorna rota de simulação
+      console.warn("STRIPE_SECRET_KEY não configurada no ambiente.");
       return {
-        url: `${origin}/conta?status=stripe_teste_pendente&orderId=${order.id}`,
-        sessionId: "cs_test_mock_" + Math.random().toString(36).substring(2, 10),
+        url: `${origin}/conta?status=stripe_config_necessaria&orderId=${order.id}`,
+        sessionId: "mock_stripe_" + order.id,
         mock: true,
       };
     }
 
-    // Monta itens no padrão form-urlencoded da API REST da Stripe
+    // Monta parâmetros no padrão form-urlencoded da API REST moderna da Stripe
     const params = new URLSearchParams();
     params.append("mode", "payment");
     params.append("currency", "brl");
@@ -142,8 +144,6 @@ export const createStripeCheckoutSession = createServerFn({ method: "POST" })
     params.append("metadata[user_id]", context.userId);
     params.append("success_url", `${origin}/conta?status=sucesso&session_id={CHECKOUT_SESSION_ID}`);
     params.append("cancel_url", `${origin}/checkout?status=cancelado`);
-    params.append("payment_method_types[0]", "card");
-    params.append("payment_method_types[1]", "boleto");
 
     let itemIdx = 0;
     for (const item of order.order_items || []) {
@@ -162,7 +162,10 @@ export const createStripeCheckoutSession = createServerFn({ method: "POST" })
       const shippingAmount = Math.round(Number(order.shipping) * 100);
       params.append(`line_items[${itemIdx}][price_data][currency]`, "brl");
       params.append(`line_items[${itemIdx}][price_data][unit_amount]`, String(shippingAmount));
-      params.append(`line_items[${itemIdx}][price_data][product_data][name]`, `Frete (${order.shipping_service || "Entrega"})`);
+      params.append(
+        `line_items[${itemIdx}][price_data][product_data][name]`,
+        `Frete (${order.shipping_service || "Entrega"})`
+      );
       params.append(`line_items[${itemIdx}][quantity]`, "1");
     }
 
