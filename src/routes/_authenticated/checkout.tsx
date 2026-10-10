@@ -1,6 +1,8 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { quoteShipping, createMercadoPagoPreference, type ShippingOption } from "@/lib/integrations.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/lib/cart";
@@ -23,18 +25,23 @@ export const Route = createFileRoute("/_authenticated/checkout")({
   component: Checkout,
 });
 
-const METHOD_LABEL: Record<PaymentMethod, string> = { cartao: "Cartão de crédito", pix: "PIX", boleto: "Boleto" };
+type Method = PaymentMethod | "mercadopago";
+const METHOD_LABEL: Record<Method, string> = { mercadopago: "Mercado Pago", cartao: "Cartão (teste)", pix: "PIX (teste)", boleto: "Boleto (teste)" };
 
 function Checkout() {
   const { user } = Route.useRouteContext();
   const cart = useCart();
-  const navigate = useNavigate();
+  const quote = useServerFn(quoteShipping);
+  const mpPref = useServerFn(createMercadoPagoPreference);
   const [addr, setAddr] = useState<Address>(emptyAddress);
   const [recipient, setRecipient] = useState({ name: "", phone: "" });
-  const [method, setMethod] = useState<PaymentMethod>("cartao");
+  const [method, setMethod] = useState<Method>("mercadopago");
   const [card, setCard] = useState({ number: "", name: "", expiry: "", cvv: "", installments: 1 });
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<(PaymentResult & { orderId?: string }) | null>(null);
+  const [options, setOptions] = useState<ShippingOption[]>([]);
+  const [shipSel, setShipSel] = useState<ShippingOption | null>(null);
+  const [quoting, setQuoting] = useState(false);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user.id],
@@ -47,7 +54,20 @@ function Checkout() {
     }
   }, [profile]);
 
-  const shipping = cart.subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING_FEE;
+  const cepDigits = addr.cep.replace(/\D/g, "");
+  const itemsKey = cart.items.map((i) => `${i.variantId}:${i.quantity}`).join(",");
+  useEffect(() => {
+    if (cepDigits.length !== 8 || !cart.items.length) return;
+    setQuoting(true);
+    quote({ data: { toCep: cepDigits, items: cart.items.map((i) => ({ id: i.variantId, quantity: i.quantity, price: i.price })) } })
+      .then((r) => { setOptions(r.options); setShipSel(r.options[0] ?? null); })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Erro no frete"))
+      .finally(() => setQuoting(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cepDigits, itemsKey]);
+
+  const freeShipping = cart.subtotal >= FREE_SHIPPING_FROM;
+  const shipping = freeShipping ? 0 : shipSel?.price ?? SHIPPING_FEE;
   const total = cart.subtotal + shipping;
 
   if (result)
@@ -77,25 +97,40 @@ function Checkout() {
       </div>
     );
 
+  const placeOrder = async (status: string, reference: string, m: string) => {
+    const { data, error } = await supabase.rpc("place_order_v2", {
+      p_items: cart.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity })),
+      p_shipping_address: { ...addr, recipient: recipient.name, phone: recipient.phone },
+      p_payment_method: m,
+      p_payment_status: status,
+      p_payment_reference: reference,
+      p_shipping: shipping,
+      p_shipping_service: freeShipping ? "Frete grátis" : shipSel ? `${shipSel.company} ${shipSel.name}` : "Padrão",
+    });
+    if (error) throw error;
+    return data as string;
+  };
+
   const pay = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!freeShipping && !shipSel) return toast.error("Informe um CEP válido para calcular o frete");
     setProcessing(true);
     try {
+      if (method === "mercadopago") {
+        const orderId = await placeOrder("pendente", "", "mercadopago");
+        cart.clear();
+        const { url } = await mpPref({ data: { orderId, origin: window.location.origin } });
+        window.location.href = url;
+        return;
+      }
       const res = await activeProvider.charge({ amount: total, method, card: method === "cartao" ? card : undefined });
       if (res.status === "recusado_teste") {
         setResult(res);
         return;
       }
-      const { data: orderId, error } = await supabase.rpc("place_order", {
-        p_items: cart.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity })),
-        p_shipping_address: { ...addr, recipient: recipient.name, phone: recipient.phone },
-        p_payment_method: method,
-        p_payment_status: res.status,
-        p_payment_reference: res.reference,
-      });
-      if (error) throw error;
+      const orderId = await placeOrder(res.status, res.reference, method);
       cart.clear();
-      setResult({ ...res, orderId: orderId as string });
+      setResult({ ...res, orderId });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao finalizar pedido");
     } finally {
@@ -114,6 +149,18 @@ function Checkout() {
             <div><Label>Telefone</Label><Input required value={recipient.phone} onChange={(e) => setRecipient({ ...recipient, phone: e.target.value })} /></div>
           </div>
           <AddressFields value={addr} onChange={setAddr} />
+          <div className="space-y-2">
+            <p className="eyebrow">Frete (Melhor Envio)</p>
+            {freeShipping ? <p className="text-sm text-success">Frete grátis neste pedido!</p>
+              : quoting ? <p className="text-sm text-muted-foreground">Calculando frete…</p>
+              : !options.length ? <p className="text-sm text-muted-foreground">Informe o CEP para calcular.</p>
+              : options.map((o) => (
+                <label key={o.id} className={`flex cursor-pointer items-center justify-between border p-3 text-sm ${shipSel?.id === o.id ? "border-primary" : ""}`}>
+                  <span className="flex items-center gap-2"><input type="radio" checked={shipSel?.id === o.id} onChange={() => setShipSel(o)} />{o.company} {o.name} · até {o.days} dias úteis</span>
+                  <span>{brl(o.price)}</span>
+                </label>
+              ))}
+          </div>
         </section>
 
         <section className="space-y-4">
@@ -121,8 +168,8 @@ function Checkout() {
             <h2 className="text-2xl">Pagamento</h2>
             <span className="eyebrow rounded-full bg-accent px-3 py-1 text-accent-foreground">Modo teste</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {activeProvider.methods.map((m) => (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(["mercadopago", ...activeProvider.methods] as Method[]).map((m) => (
               <button type="button" key={m} onClick={() => setMethod(m)}
                 className={`border py-3 text-sm transition ${method === m ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary"}`}>
                 {METHOD_LABEL[m]}
@@ -146,6 +193,7 @@ function Checkout() {
               <p className="col-span-4 text-xs text-muted-foreground">Teste: qualquer cartão é aprovado; cartões terminados em 0002 são recusados.</p>
             </div>
           )}
+          {method === "mercadopago" && <p className="border bg-card p-5 text-sm text-muted-foreground">Você será levada ao Mercado Pago (ambiente sandbox) para pagar com cartão, PIX ou boleto de teste.</p>}
           {method === "pix" && <p className="border bg-card p-5 text-sm text-muted-foreground">Um código PIX de teste será gerado e aprovado automaticamente.</p>}
           {method === "boleto" && <p className="border bg-card p-5 text-sm text-muted-foreground">Um boleto de teste será gerado e o pedido ficará aguardando pagamento.</p>}
         </section>
