@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -149,6 +149,18 @@ function Checkout() {
             <div><Label>Telefone</Label><Input required value={recipient.phone} onChange={(e) => setRecipient({ ...recipient, phone: e.target.value })} /></div>
           </div>
           <AddressFields value={addr} onChange={setAddr} />
+          <div className="space-y-2">
+            <p className="eyebrow">Frete (Melhor Envio)</p>
+            {freeShipping ? <p className="text-sm text-success">Frete grátis neste pedido!</p>
+              : quoting ? <p className="text-sm text-muted-foreground">Calculando frete…</p>
+              : !options.length ? <p className="text-sm text-muted-foreground">Informe o CEP para calcular.</p>
+              : options.map((o) => (
+                <label key={o.id} className={`flex cursor-pointer items-center justify-between border p-3 text-sm ${shipSel?.id === o.id ? "border-primary" : ""}`}>
+                  <span className="flex items-center gap-2"><input type="radio" checked={shipSel?.id === o.id} onChange={() => setShipSel(o)} />{o.company} {o.name} · até {o.days} dias úteis</span>
+                  <span>{brl(o.price)}</span>
+                </label>
+              ))}
+          </div>
         </section>
 
         <section className="space-y-4">
@@ -181,6 +193,7 @@ function Checkout() {
               <p className="col-span-4 text-xs text-muted-foreground">Teste: qualquer cartão é aprovado; cartões terminados em 0002 são recusados.</p>
             </div>
           )}
+          {method === "mercadopago" && <p className="border bg-card p-5 text-sm text-muted-foreground">Você será levada ao Mercado Pago (ambiente sandbox) para pagar com cartão, PIX ou boleto de teste.</p>}
           {method === "pix" && <p className="border bg-card p-5 text-sm text-muted-foreground">Um código PIX de teste será gerado e aprovado automaticamente.</p>}
           {method === "boleto" && <p className="border bg-card p-5 text-sm text-muted-foreground">Um boleto de teste será gerado e o pedido ficará aguardando pagamento.</p>}
         </section>
