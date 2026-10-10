@@ -20,7 +20,18 @@ const IMAGES: Record<string, string> = {
   "intimas-infantis": intimasInfantis,
 };
 
-export const productImage = (key: string) => IMAGES[key] ?? lingerie;
+export const productImage = (key: string) => {
+  if (!key) return lingerie;
+  if (
+    key.startsWith("http://") ||
+    key.startsWith("https://") ||
+    key.startsWith("data:") ||
+    key.startsWith("blob:")
+  ) {
+    return key;
+  }
+  return IMAGES[key] ?? lingerie;
+};
 export const categoryLabel = (slug: string) =>
   CATEGORIES.find((c) => c.slug === slug)?.label ?? slug;
 

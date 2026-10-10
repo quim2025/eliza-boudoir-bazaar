@@ -1,0 +1,27 @@
+O que você já pode testar no visualizador:
+
+Acesse: eliza-boudoir-bazaar.lovable.app
+
+Frete no Melhor Envio (Sandbox):
+Adicione qualquer peça de lingerie ao carrinho e vá para o checkout.
+Digite um CEP (ex: 01310-100 ou 20040-002).
+Você verá as opções cotadas em tempo real:
+Correios Mini Envios (R$ 18,69 — habilitado pela nossa otimização de cubagem)
+Correios PAC e SEDEX
+Jadlog .Package e .Com
+Pagamento Stripe (Modo Teste):
+Selecione Cartão de Crédito e clique no atalho "Usar Cartão Aprovado (4242)" para preenchimento imediato.
+Ou clique em "Testar Recusa (0002)" para simular o comportamento de cartão recusado da Stripe.
+Selecione Stripe Checkout para ser direcionado à tela oficial de pagamento.
+
+
+....>>>>
+
+
+Como testar agora no visualizador:
+
+Acesse: eliza-boudoir-bazaar.lovable.app
+
+Adicione um produto ao carrinho e vá para o Checkout.
+Para pagar direto na tela: Veja os campos de cartão abertos, clique em "Usar Cartão Aprovado (4242)" e depois em "Pagar com Cartão".
+Para testar a tela oficial da Stripe: Clique na aba "Stripe Checkout Oficial" e depois no botão "➡️ Ir para o Stripe Checkout".
