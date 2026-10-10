@@ -80,6 +80,5 @@ export const createMercadoPagoPreference = createServerFn({ method: "POST" })
       throw new Error("Não foi possível iniciar o pagamento");
     }
     const pref = (await res.json()) as { id: string; init_point: string; sandbox_init_point: string };
-    await context.supabase.from("orders").select("id").eq("id", order.id); // RLS check only
     return { url: pref.sandbox_init_point || pref.init_point, preferenceId: pref.id };
   });
