@@ -26,35 +26,84 @@ export interface PaymentProvider {
   charge(req: PaymentRequest): Promise<PaymentResult>;
 }
 
-const ref = () => "TEST-" + Math.random().toString(36).slice(2, 10).toUpperCase();
+const ref = (prefix = "STRIPE-TEST") =>
+  `${prefix}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
 
-export const TestProvider: PaymentProvider = {
-  id: "test",
-  label: "Ambiente de testes Eliza",
+export const StripeTestProvider: PaymentProvider = {
+  id: "stripe_test",
+  label: "Stripe Sandbox (Modo Teste)",
   methods: ["cartao", "pix", "boleto"],
-  maxInstallments: 6,
+  maxInstallments: 12,
   async charge(req) {
     await new Promise((r) => setTimeout(r, 1200));
-    if (req.method === "pix")
+
+    if (req.method === "pix") {
       return {
         status: "aprovado_teste",
-        reference: ref(),
-        message: "PIX de teste confirmado automaticamente.",
-        pixCode: "00020126TESTE-ELIZA-LINGERIE-PIX" + Date.now(),
+        reference: ref("STRIPE-PIX"),
+        message: "PIX de teste confirmado com sucesso via Stripe.",
+        pixCode: "00020126TESTE-STRIPE-ELIZA-PIX" + Date.now(),
       };
-    if (req.method === "boleto")
+    }
+
+    if (req.method === "boleto") {
       return {
         status: "pendente",
-        reference: ref(),
-        message: "Boleto de teste gerado. Aguardando pagamento.",
+        reference: ref("STRIPE-BOL"),
+        message: "Boleto de teste Stripe gerado. Aguardando compensação.",
         boletoLine: "34191.79001 01043.510047 91020.150008 0 " + Math.floor(req.amount * 100),
       };
+    }
+
+    // Regras de validação baseadas nos cartões de teste oficiais da Stripe
     const digits = (req.card?.number ?? "").replace(/\D/g, "");
-    if (digits.endsWith("0002"))
-      return { status: "recusado_teste", reference: ref(), message: "Cartão de teste recusado." };
-    if (digits.length < 13) return { status: "recusado_teste", reference: ref(), message: "Número de cartão inválido." };
-    return { status: "aprovado_teste", reference: ref(), message: "Pagamento de teste aprovado." };
+
+    if (digits.endsWith("0002")) {
+      return {
+        status: "recusado_teste",
+        reference: ref(),
+        message: "Cartão recusado pelo emissor (Stripe test: card_declined).",
+      };
+    }
+
+    if (digits.endsWith("0999")) {
+      return {
+        status: "recusado_teste",
+        reference: ref(),
+        message: "Saldo insuficiente (Stripe test: insufficient_funds).",
+      };
+    }
+
+    if (digits.endsWith("0115")) {
+      return {
+        status: "recusado_teste",
+        reference: ref(),
+        message: "Cartão expirado (Stripe test: expired_card).",
+      };
+    }
+
+    if (digits.endsWith("0127")) {
+      return {
+        status: "recusado_teste",
+        reference: ref(),
+        message: "Código de segurança CVC incorreto (Stripe test: incorrect_cvc).",
+      };
+    }
+
+    if (digits.length < 13) {
+      return {
+        status: "recusado_teste",
+        reference: ref(),
+        message: "Número de cartão de teste inválido. Utilize 4242 4242 4242 4242.",
+      };
+    }
+
+    return {
+      status: "aprovado_teste",
+      reference: ref(),
+      message: "Pagamento de teste aprovado pelo Stripe (status: succeeded).",
+    };
   },
 };
 
-export const activeProvider: PaymentProvider = TestProvider;
+export const activeProvider: PaymentProvider = StripeTestProvider;

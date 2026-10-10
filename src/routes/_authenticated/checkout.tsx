@@ -2,12 +2,17 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { quoteShipping, createMercadoPagoPreference, type ShippingOption } from "@/lib/integrations.functions";
+import {
+  quoteShipping,
+  createStripeCheckoutSession,
+  createMercadoPagoPreference,
+  type ShippingOption,
+} from "@/lib/integrations.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/lib/cart";
 import { brl, FREE_SHIPPING_FROM, SHIPPING_FEE } from "@/lib/catalog";
-import { activeProvider, type PaymentMethod, type PaymentResult } from "@/lib/payments";
+import { activeProvider, type PaymentResult } from "@/lib/payments";
 import { AddressFields, emptyAddress, type Address } from "@/components/AddressFields";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,17 +30,24 @@ export const Route = createFileRoute("/_authenticated/checkout")({
   component: Checkout,
 });
 
-type Method = PaymentMethod | "mercadopago";
-const METHOD_LABEL: Record<Method, string> = { mercadopago: "Mercado Pago", cartao: "Cartão (teste)", pix: "PIX (teste)", boleto: "Boleto (teste)" };
+type Method = "stripe" | "cartao" | "pix" | "boleto" | "mercadopago";
+const METHOD_LABEL: Record<Method, string> = {
+  stripe: "Stripe Checkout",
+  cartao: "Cartão de Crédito",
+  pix: "PIX (teste)",
+  boleto: "Boleto (teste)",
+  mercadopago: "Mercado Pago",
+};
 
 function Checkout() {
   const { user } = Route.useRouteContext();
   const cart = useCart();
   const quote = useServerFn(quoteShipping);
+  const stripeSession = useServerFn(createStripeCheckoutSession);
   const mpPref = useServerFn(createMercadoPagoPreference);
   const [addr, setAddr] = useState<Address>(emptyAddress);
   const [recipient, setRecipient] = useState({ name: "", phone: "" });
-  const [method, setMethod] = useState<Method>("mercadopago");
+  const [method, setMethod] = useState<Method>("stripe");
   const [card, setCard] = useState({ number: "", name: "", expiry: "", cvv: "", installments: 1 });
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<(PaymentResult & { orderId?: string }) | null>(null);
@@ -43,14 +55,45 @@ function Checkout() {
   const [shipSel, setShipSel] = useState<ShippingOption | null>(null);
   const [quoting, setQuoting] = useState(false);
 
+  const fillStripeTestCard = (type: "approved" | "declined" = "approved") => {
+    if (type === "declined") {
+      setCard({
+        number: "4000 0000 0000 0002",
+        name: "Teste Recusa Stripe",
+        expiry: "12/28",
+        cvv: "123",
+        installments: 1,
+      });
+      toast.info("Cartão de recusa preenchido (Stripe test: 4000...0002)");
+    } else {
+      setCard({
+        number: "4242 4242 4242 4242",
+        name: user.email?.split("@")[0]?.toUpperCase() || "CLIENTE ELIZA",
+        expiry: "12/28",
+        cvv: "123",
+        installments: 1,
+      });
+      toast.success("Cartão de teste Stripe preenchido (4242 4242 4242 4242)");
+    }
+  };
+
   const { data: profile } = useQuery({
     queryKey: ["profile", user.id],
     queryFn: async () => (await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()).data,
   });
   useEffect(() => {
     if (profile) {
-      setAddr({ cep: profile.cep ?? "", street: profile.street ?? "", number: profile.number ?? "", complement: profile.complement ?? "", neighborhood: profile.neighborhood ?? "", city: profile.city ?? "", state: profile.state ?? "", delivery_notes: profile.delivery_notes ?? "" });
-      setRecipient({ name: profile.full_name, phone: profile.phone ?? "" });
+      setAddr({
+        cep: profile.cep ?? "",
+        street: profile.street ?? "",
+        number: profile.number ?? "",
+        complement: profile.complement ?? "",
+        neighborhood: profile.neighborhood ?? "",
+        city: profile.city ?? "",
+        state: profile.state ?? "",
+        delivery_notes: profile.delivery_notes ?? "",
+      });
+      setRecipient({ name: profile.full_name || "", phone: profile.phone ?? "" });
     }
   }, [profile]);
 
@@ -59,9 +102,17 @@ function Checkout() {
   useEffect(() => {
     if (cepDigits.length !== 8 || !cart.items.length) return;
     setQuoting(true);
-    quote({ data: { toCep: cepDigits, items: cart.items.map((i) => ({ id: i.variantId, quantity: i.quantity, price: i.price })) } })
-      .then((r) => { setOptions(r.options); setShipSel(r.options[0] ?? null); })
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Erro no frete"))
+    quote({
+      data: {
+        toCep: cepDigits,
+        items: cart.items.map((i) => ({ id: i.variantId, quantity: i.quantity, price: i.price })),
+      },
+    })
+      .then((r) => {
+        setOptions(r.options);
+        setShipSel(r.options[0] ?? null);
+      })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Erro ao calcular frete"))
       .finally(() => setQuoting(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cepDigits, itemsKey]);
@@ -73,17 +124,23 @@ function Checkout() {
   if (result)
     return (
       <div className="mx-auto max-w-xl px-6 py-20 text-center">
-        <p className="eyebrow text-muted-foreground">Ambiente de testes</p>
-        <h1 className="mt-2 text-5xl">{result.status === "recusado_teste" ? "Pagamento recusado" : "Pedido recebido!"}</h1>
+        <p className="eyebrow text-muted-foreground">Ambiente de testes (Stripe Sandbox)</p>
+        <h1 className="mt-2 text-5xl">
+          {result.status === "recusado_teste" ? "Pagamento não aprovado" : "Pedido confirmado!"}
+        </h1>
         <p className="mt-4 text-muted-foreground">{result.message}</p>
-        {result.pixCode && <p className="mt-6 break-all border bg-card p-4 text-xs">{result.pixCode}</p>}
-        {result.boletoLine && <p className="mt-6 border bg-card p-4 text-sm">{result.boletoLine}</p>}
-        <p className="mt-4 text-sm">Referência: {result.reference}</p>
+        {result.pixCode && <p className="mt-6 break-all border bg-card p-4 text-xs font-mono">{result.pixCode}</p>}
+        {result.boletoLine && <p className="mt-6 border bg-card p-4 text-sm font-mono">{result.boletoLine}</p>}
+        <p className="mt-4 text-sm text-muted-foreground">Código de Referência: {result.reference}</p>
         <div className="mt-8 flex justify-center gap-3">
           {result.status === "recusado_teste" ? (
-            <Button className="rounded-none eyebrow" onClick={() => setResult(null)}>Tentar novamente</Button>
+            <Button className="rounded-none eyebrow" onClick={() => setResult(null)}>
+              Tentar novamente
+            </Button>
           ) : (
-            <Button asChild className="rounded-none eyebrow"><Link to="/conta">Ver meus pedidos</Link></Button>
+            <Button asChild className="rounded-none eyebrow">
+              <Link to="/conta">Ver meus pedidos</Link>
+            </Button>
           )}
         </div>
       </div>
@@ -93,7 +150,9 @@ function Checkout() {
     return (
       <div className="mx-auto max-w-xl px-6 py-24 text-center">
         <h1 className="text-4xl">Seu carrinho está vazio</h1>
-        <Button asChild className="mt-6 rounded-none eyebrow"><Link to="/loja">Ir para a loja</Link></Button>
+        <Button asChild className="mt-6 rounded-none eyebrow">
+          <Link to="/loja">Ir para a loja</Link>
+        </Button>
       </div>
     );
 
@@ -116,6 +175,19 @@ function Checkout() {
     if (!freeShipping && !shipSel) return toast.error("Informe um CEP válido para calcular o frete");
     setProcessing(true);
     try {
+      if (method === "stripe") {
+        const orderId = await placeOrder("pendente", "", "stripe");
+        const { url, mock } = await stripeSession({
+          data: { orderId, origin: window.location.origin },
+        });
+        cart.clear();
+        if (mock) {
+          toast.info("Modo de teste Stripe ativado. Redirecionando para seu pedido...");
+        }
+        window.location.href = url;
+        return;
+      }
+
       if (method === "mercadopago") {
         const orderId = await placeOrder("pendente", "", "mercadopago");
         cart.clear();
@@ -123,7 +195,13 @@ function Checkout() {
         window.location.href = url;
         return;
       }
-      const res = await activeProvider.charge({ amount: total, method, card: method === "cartao" ? card : undefined });
+
+      const res = await activeProvider.charge({
+        amount: total,
+        method: method as any,
+        card: method === "cartao" ? card : undefined,
+      });
+
       if (res.status === "recusado_teste") {
         setResult(res);
         return;
@@ -145,57 +223,217 @@ function Checkout() {
         <section className="space-y-4">
           <h2 className="text-2xl">Entrega</h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div><Label>Destinatário</Label><Input required value={recipient.name} onChange={(e) => setRecipient({ ...recipient, name: e.target.value })} /></div>
-            <div><Label>Telefone</Label><Input required value={recipient.phone} onChange={(e) => setRecipient({ ...recipient, phone: e.target.value })} /></div>
+            <div>
+              <Label>Destinatário</Label>
+              <Input
+                required
+                value={recipient.name}
+                onChange={(e) => setRecipient({ ...recipient, name: e.target.value })}
+                placeholder="Nome de quem vai receber"
+              />
+            </div>
+            <div>
+              <Label>Telefone de Contato</Label>
+              <Input
+                required
+                value={recipient.phone}
+                onChange={(e) => setRecipient({ ...recipient, phone: e.target.value })}
+                placeholder="(11) 98765-4321"
+              />
+            </div>
           </div>
           <AddressFields value={addr} onChange={setAddr} />
-          <div className="space-y-2">
-            <p className="eyebrow">Frete (Melhor Envio)</p>
-            {freeShipping ? <p className="text-sm text-success">Frete grátis neste pedido!</p>
-              : quoting ? <p className="text-sm text-muted-foreground">Calculando frete…</p>
-              : !options.length ? <p className="text-sm text-muted-foreground">Informe o CEP para calcular.</p>
-              : options.map((o) => (
-                <label key={o.id} className={`flex cursor-pointer items-center justify-between border p-3 text-sm ${shipSel?.id === o.id ? "border-primary" : ""}`}>
-                  <span className="flex items-center gap-2"><input type="radio" checked={shipSel?.id === o.id} onChange={() => setShipSel(o)} />{o.company} {o.name} · até {o.days} dias úteis</span>
-                  <span>{brl(o.price)}</span>
-                </label>
-              ))}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="eyebrow">Opções de Frete (Melhor Envio Sandbox)</p>
+              {options.length > 0 && (
+                <span className="text-xs text-muted-foreground">{options.length} transportadoras disponíveis</span>
+              )}
+            </div>
+
+            {freeShipping ? (
+              <div className="border border-green-200 bg-green-50 p-4 text-sm text-green-900 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-300">
+                ✨ <strong>Parabéns!</strong> Você ganhou frete grátis nesta compra (pedido acima de R$ 299).
+              </div>
+            ) : quoting ? (
+              <p className="text-sm text-muted-foreground animate-pulse">Calculando cotações no Melhor Envio…</p>
+            ) : !options.length ? (
+              <p className="text-sm text-muted-foreground">Informe o CEP acima para cotar transportadoras em tempo real.</p>
+            ) : (
+              <div className="grid gap-2">
+                {options.map((o) => (
+                  <label
+                    key={o.id}
+                    className={`flex cursor-pointer items-center justify-between border p-3 text-sm transition hover:border-primary ${
+                      shipSel?.id === o.id ? "border-primary bg-primary/5 font-medium" : "bg-card"
+                    }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="shipping_sel"
+                        checked={shipSel?.id === o.id}
+                        onChange={() => setShipSel(o)}
+                        className="text-primary focus:ring-primary"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground">{o.company}</span>
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                            {o.name}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Previsão: até {o.days} dias úteis</p>
+                      </div>
+                    </span>
+                    <span className="text-base font-semibold">{brl(o.price)}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
         <section className="space-y-4">
           <div className="flex items-baseline justify-between">
-            <h2 className="text-2xl">Pagamento</h2>
-            <span className="eyebrow rounded-full bg-accent px-3 py-1 text-accent-foreground">Modo teste</span>
+            <h2 className="text-2xl">Forma de Pagamento</h2>
+            <span className="eyebrow rounded-full bg-accent px-3 py-1 text-accent-foreground text-xs">
+              Stripe Test Mode
+            </span>
           </div>
+
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {(["mercadopago", ...activeProvider.methods] as Method[]).map((m) => (
-              <button type="button" key={m} onClick={() => setMethod(m)}
-                className={`border py-3 text-sm transition ${method === m ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary"}`}>
+            {(["stripe", "cartao", "pix", "boleto"] as Method[]).map((m) => (
+              <button
+                type="button"
+                key={m}
+                onClick={() => setMethod(m)}
+                className={`border py-3 text-sm transition ${
+                  method === m
+                    ? "border-primary bg-primary text-primary-foreground font-medium"
+                    : "hover:border-primary bg-card"
+                }`}
+              >
                 {METHOD_LABEL[m]}
               </button>
             ))}
           </div>
+
+          {method === "stripe" && (
+            <div className="border bg-card p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                  Recomendado
+                </div>
+                <h3 className="font-medium">Stripe Checkout Oficial (Ambiente Teste)</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Você será redirecionada com segurança para a página oficial do Stripe Checkout em modo de teste, com suporte a cartão, Apple Pay, Google Pay e boleto.
+              </p>
+              <div className="rounded border bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
+                <p>💡 <strong>Cartão para testar na Stripe:</strong> <code>4242 4242 4242 4242</code></p>
+                <p>Validade: qualquer data futura (ex: 12/28) · CVC: qualquer 3 dígitos (ex: 123)</p>
+              </div>
+            </div>
+          )}
+
           {method === "cartao" && (
             <div className="grid grid-cols-4 gap-4 border bg-card p-5">
-              <div className="col-span-4"><Label>Número do cartão</Label><Input required value={card.number} onChange={(e) => setCard({ ...card, number: e.target.value })} placeholder="4242 4242 4242 4242" /></div>
-              <div className="col-span-4"><Label>Nome impresso</Label><Input required value={card.name} onChange={(e) => setCard({ ...card, name: e.target.value })} /></div>
-              <div className="col-span-2"><Label>Validade</Label><Input required value={card.expiry} onChange={(e) => setCard({ ...card, expiry: e.target.value })} placeholder="MM/AA" /></div>
-              <div className="col-span-2"><Label>CVV</Label><Input required value={card.cvv} onChange={(e) => setCard({ ...card, cvv: e.target.value })} placeholder="123" /></div>
+              <div className="col-span-4 flex items-center justify-between pb-1 border-b">
+                <span className="text-xs font-medium text-muted-foreground">Simulador de Cartão Stripe</span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fillStripeTestCard("approved")}
+                    className="text-xs text-primary underline hover:text-primary/80"
+                  >
+                    Usar Cartão Aprovado (4242)
+                  </button>
+                  <span className="text-xs text-muted-foreground">|</span>
+                  <button
+                    type="button"
+                    onClick={() => fillStripeTestCard("declined")}
+                    className="text-xs text-destructive underline hover:text-destructive/80"
+                  >
+                    Testar Recusa (0002)
+                  </button>
+                </div>
+              </div>
+
+              <div className="col-span-4">
+                <Label>Número do cartão</Label>
+                <Input
+                  required
+                  value={card.number}
+                  onChange={(e) => setCard({ ...card, number: e.target.value })}
+                  placeholder="4242 4242 4242 4242"
+                />
+              </div>
+              <div className="col-span-4">
+                <Label>Nome impresso no cartão</Label>
+                <Input
+                  required
+                  value={card.name}
+                  onChange={(e) => setCard({ ...card, name: e.target.value })}
+                  placeholder="NOME COMPLETO"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>Validade</Label>
+                <Input
+                  required
+                  value={card.expiry}
+                  onChange={(e) => setCard({ ...card, expiry: e.target.value })}
+                  placeholder="MM/AA"
+                />
+              </div>
+              <div className="col-span-2">
+                <Label>CVV</Label>
+                <Input
+                  required
+                  value={card.cvv}
+                  onChange={(e) => setCard({ ...card, cvv: e.target.value })}
+                  placeholder="123"
+                />
+              </div>
               <div className="col-span-4">
                 <Label>Parcelas</Label>
-                <select className="mt-1 h-9 w-full border bg-background px-3 text-sm" value={card.installments} onChange={(e) => setCard({ ...card, installments: Number(e.target.value) })}>
+                <select
+                  className="mt-1 h-9 w-full border bg-background px-3 text-sm"
+                  value={card.installments}
+                  onChange={(e) => setCard({ ...card, installments: Number(e.target.value) })}
+                >
                   {Array.from({ length: activeProvider.maxInstallments }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>{n}x de {brl(total / n)} sem juros</option>
+                    <option key={n} value={n}>
+                      {n}x de {brl(total / n)} sem juros
+                    </option>
                   ))}
                 </select>
               </div>
-              <p className="col-span-4 text-xs text-muted-foreground">Teste: qualquer cartão é aprovado; cartões terminados em 0002 são recusados.</p>
+              <p className="col-span-4 text-xs text-muted-foreground">
+                Regras Stripe: Cartão 4242 é aprovado; cartões terminados em 0002 são recusados.
+              </p>
             </div>
           )}
-          {method === "mercadopago" && <p className="border bg-card p-5 text-sm text-muted-foreground">Você será levada ao Mercado Pago (ambiente sandbox) para pagar com cartão, PIX ou boleto de teste.</p>}
-          {method === "pix" && <p className="border bg-card p-5 text-sm text-muted-foreground">Um código PIX de teste será gerado e aprovado automaticamente.</p>}
-          {method === "boleto" && <p className="border bg-card p-5 text-sm text-muted-foreground">Um boleto de teste será gerado e o pedido ficará aguardando pagamento.</p>}
+
+          {method === "pix" && (
+            <div className="border bg-card p-5 space-y-2">
+              <h3 className="font-medium text-sm">PIX Instantâneo (Ambiente de Testes)</h3>
+              <p className="text-sm text-muted-foreground">
+                Um código PIX de teste (Copia e Cola) será gerado e aprovado para simular o recebimento instantâneo.
+              </p>
+            </div>
+          )}
+
+          {method === "boleto" && (
+            <div className="border bg-card p-5 space-y-2">
+              <h3 className="font-medium text-sm">Boleto Bancário (Ambiente de Testes)</h3>
+              <p className="text-sm text-muted-foreground">
+                Uma linha digitável de teste será gerada e o pedido ficará com status &quot;aguardando pagamento&quot;.
+              </p>
+            </div>
+          )}
         </section>
       </div>
 
@@ -204,21 +442,40 @@ function Checkout() {
         <ul className="space-y-2 text-sm">
           {cart.items.map((i) => (
             <li key={i.variantId} className="flex justify-between gap-2">
-              <span>{i.quantity}× {i.name} <span className="text-muted-foreground">({i.size}, {i.color})</span></span>
+              <span>
+                {i.quantity}× {i.name}{" "}
+                <span className="text-muted-foreground">({i.size}, {i.color})</span>
+              </span>
               <span>{brl(i.price * i.quantity)}</span>
             </li>
           ))}
         </ul>
         <div className="space-y-1 border-t pt-3 text-sm">
-          <div className="flex justify-between"><span>Subtotal</span><span>{brl(cart.subtotal)}</span></div>
-          <div className="flex justify-between"><span>Frete</span><span>{shipping ? brl(shipping) : "Grátis"}</span></div>
-          <div className="flex justify-between pt-2 text-base"><span>Total</span><span>{brl(total)}</span></div>
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>{brl(cart.subtotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Frete ({shipSel?.company || "Entrega"})</span>
+            <span>{shipping ? brl(shipping) : "Grátis"}</span>
+          </div>
+          <div className="flex justify-between pt-2 text-base font-semibold">
+            <span>Total</span>
+            <span>{brl(total)}</span>
+          </div>
         </div>
         <Button type="submit" size="lg" disabled={processing} className="w-full rounded-none eyebrow">
-          {processing ? "Processando…" : `Pagar ${brl(total)}`}
+          {processing
+            ? "Processando…"
+            : method === "stripe"
+            ? `Pagar via Stripe ${brl(total)}`
+            : `Pagar ${brl(total)}`}
         </Button>
-        <p className="text-center text-xs text-muted-foreground">{activeProvider.label} — nenhuma cobrança real</p>
+        <p className="text-center text-xs text-muted-foreground">
+          {method === "stripe" ? "Stripe Checkout (Teste)" : activeProvider.label} — nenhuma cobrança real
+        </p>
       </aside>
     </form>
   );
 }
+export default Checkout;
