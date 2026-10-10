@@ -47,7 +47,7 @@ function Checkout() {
   const mpPref = useServerFn(createMercadoPagoPreference);
   const [addr, setAddr] = useState<Address>(emptyAddress);
   const [recipient, setRecipient] = useState({ name: "", phone: "" });
-  const [method, setMethod] = useState<Method>("stripe");
+  const [method, setMethod] = useState<Method>("cartao");
   const [card, setCard] = useState({ number: "", name: "", expiry: "", cvv: "", installments: 1 });
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<(PaymentResult & { orderId?: string }) | null>(null);
@@ -304,7 +304,7 @@ function Checkout() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {(["stripe", "cartao", "pix", "boleto"] as Method[]).map((m) => (
+            {(["cartao", "stripe", "pix", "boleto"] as Method[]).map((m) => (
               <button
                 type="button"
                 key={m}
@@ -321,20 +321,27 @@ function Checkout() {
           </div>
 
           {method === "stripe" && (
-            <div className="border bg-card p-5 space-y-3">
+            <div className="border bg-card p-5 space-y-4">
               <div className="flex items-center gap-2">
-                <div className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-                  Recomendado
+                <div className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                  Ambiente Teste Oficial
                 </div>
-                <h3 className="font-medium">Stripe Checkout Oficial (Ambiente Teste)</h3>
+                <h3 className="font-semibold text-base">Stripe Checkout Oficial</h3>
               </div>
               <p className="text-sm text-muted-foreground">
-                Você será redirecionada com segurança para a página oficial do Stripe Checkout em modo de teste, com suporte a cartão, Apple Pay, Google Pay e boleto.
+                Ao clicar no botão abaixo, você será redirecionada para a página oficial do <strong>Stripe Checkout</strong>, onde poderá pagar com cartão, Apple Pay, Google Pay ou outras carteiras no modo de teste.
               </p>
               <div className="rounded border bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
-                <p>💡 <strong>Cartão para testar na Stripe:</strong> <code>4242 4242 4242 4242</code></p>
+                <p>💡 <strong>Cartão para testar na Stripe:</strong> <code className="font-mono font-bold text-foreground">4242 4242 4242 4242</code></p>
                 <p>Validade: qualquer data futura (ex: 12/28) · CVC: qualquer 3 dígitos (ex: 123)</p>
               </div>
+              <Button
+                type="submit"
+                disabled={processing}
+                className="w-full bg-[#635BFF] hover:bg-[#5349e0] text-white rounded-none py-6 text-base font-medium shadow-sm transition"
+              >
+                {processing ? "Iniciando Stripe Checkout…" : `➡️ Ir para o Stripe Checkout (${brl(total)})`}
+              </Button>
             </div>
           )}
 
@@ -468,7 +475,9 @@ function Checkout() {
           {processing
             ? "Processando…"
             : method === "stripe"
-            ? `Pagar via Stripe ${brl(total)}`
+            ? `Ir para Stripe Checkout (${brl(total)})`
+            : method === "cartao"
+            ? `Pagar com Cartão (${brl(total)})`
             : `Pagar ${brl(total)}`}
         </Button>
         <p className="text-center text-xs text-muted-foreground">
