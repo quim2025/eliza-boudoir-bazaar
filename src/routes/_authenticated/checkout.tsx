@@ -23,18 +23,23 @@ export const Route = createFileRoute("/_authenticated/checkout")({
   component: Checkout,
 });
 
-const METHOD_LABEL: Record<PaymentMethod, string> = { cartao: "Cartão de crédito", pix: "PIX", boleto: "Boleto" };
+type Method = PaymentMethod | "mercadopago";
+const METHOD_LABEL: Record<Method, string> = { mercadopago: "Mercado Pago", cartao: "Cartão (teste)", pix: "PIX (teste)", boleto: "Boleto (teste)" };
 
 function Checkout() {
   const { user } = Route.useRouteContext();
   const cart = useCart();
-  const navigate = useNavigate();
+  const quote = useServerFn(quoteShipping);
+  const mpPref = useServerFn(createMercadoPagoPreference);
   const [addr, setAddr] = useState<Address>(emptyAddress);
   const [recipient, setRecipient] = useState({ name: "", phone: "" });
-  const [method, setMethod] = useState<PaymentMethod>("cartao");
+  const [method, setMethod] = useState<Method>("mercadopago");
   const [card, setCard] = useState({ number: "", name: "", expiry: "", cvv: "", installments: 1 });
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<(PaymentResult & { orderId?: string }) | null>(null);
+  const [options, setOptions] = useState<ShippingOption[]>([]);
+  const [shipSel, setShipSel] = useState<ShippingOption | null>(null);
+  const [quoting, setQuoting] = useState(false);
 
   const { data: profile } = useQuery({
     queryKey: ["profile", user.id],
@@ -47,7 +52,20 @@ function Checkout() {
     }
   }, [profile]);
 
-  const shipping = cart.subtotal >= FREE_SHIPPING_FROM ? 0 : SHIPPING_FEE;
+  const cepDigits = addr.cep.replace(/\D/g, "");
+  const itemsKey = cart.items.map((i) => `${i.variantId}:${i.quantity}`).join(",");
+  useEffect(() => {
+    if (cepDigits.length !== 8 || !cart.items.length) return;
+    setQuoting(true);
+    quote({ data: { toCep: cepDigits, items: cart.items.map((i) => ({ id: i.variantId, quantity: i.quantity, price: i.price })) } })
+      .then((r) => { setOptions(r.options); setShipSel(r.options[0] ?? null); })
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Erro no frete"))
+      .finally(() => setQuoting(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cepDigits, itemsKey]);
+
+  const freeShipping = cart.subtotal >= FREE_SHIPPING_FROM;
+  const shipping = freeShipping ? 0 : shipSel?.price ?? SHIPPING_FEE;
   const total = cart.subtotal + shipping;
 
   if (result)
@@ -77,25 +95,40 @@ function Checkout() {
       </div>
     );
 
+  const placeOrder = async (status: string, reference: string, m: string) => {
+    const { data, error } = await supabase.rpc("place_order_v2", {
+      p_items: cart.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity })),
+      p_shipping_address: { ...addr, recipient: recipient.name, phone: recipient.phone },
+      p_payment_method: m,
+      p_payment_status: status,
+      p_payment_reference: reference,
+      p_shipping: shipping,
+      p_shipping_service: freeShipping ? "Frete grátis" : shipSel ? `${shipSel.company} ${shipSel.name}` : "Padrão",
+    });
+    if (error) throw error;
+    return data as string;
+  };
+
   const pay = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!freeShipping && !shipSel) return toast.error("Informe um CEP válido para calcular o frete");
     setProcessing(true);
     try {
+      if (method === "mercadopago") {
+        const orderId = await placeOrder("pendente", "", "mercadopago");
+        cart.clear();
+        const { url } = await mpPref({ data: { orderId, origin: window.location.origin } });
+        window.location.href = url;
+        return;
+      }
       const res = await activeProvider.charge({ amount: total, method, card: method === "cartao" ? card : undefined });
       if (res.status === "recusado_teste") {
         setResult(res);
         return;
       }
-      const { data: orderId, error } = await supabase.rpc("place_order", {
-        p_items: cart.items.map((i) => ({ variant_id: i.variantId, quantity: i.quantity })),
-        p_shipping_address: { ...addr, recipient: recipient.name, phone: recipient.phone },
-        p_payment_method: method,
-        p_payment_status: res.status,
-        p_payment_reference: res.reference,
-      });
-      if (error) throw error;
+      const orderId = await placeOrder(res.status, res.reference, method);
       cart.clear();
-      setResult({ ...res, orderId: orderId as string });
+      setResult({ ...res, orderId });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao finalizar pedido");
     } finally {
