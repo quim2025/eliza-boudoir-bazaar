@@ -71,6 +71,7 @@ export type Database = {
           payment_status: string
           shipping: number
           shipping_address: Json
+          shipping_service: string | null
           status: string
           subtotal: number
           total: number
@@ -84,6 +85,7 @@ export type Database = {
           payment_status?: string
           shipping?: number
           shipping_address?: Json
+          shipping_service?: string | null
           status?: string
           subtotal: number
           total: number
@@ -97,6 +99,7 @@ export type Database = {
           payment_status?: string
           shipping?: number
           shipping_address?: Json
+          shipping_service?: string | null
           status?: string
           subtotal?: number
           total?: number
@@ -263,6 +266,18 @@ export type Database = {
           p_payment_reference: string
           p_payment_status: string
           p_shipping_address: Json
+        }
+        Returns: string
+      }
+      place_order_v2: {
+        Args: {
+          p_items: Json
+          p_payment_method: string
+          p_payment_reference: string
+          p_payment_status: string
+          p_shipping: number
+          p_shipping_address: Json
+          p_shipping_service: string
         }
         Returns: string
       }
