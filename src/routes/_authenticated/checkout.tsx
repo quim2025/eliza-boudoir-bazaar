@@ -1,6 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { quoteShipping, createMercadoPagoPreference, type ShippingOption } from "@/lib/integrations.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "@/lib/cart";
@@ -154,8 +156,8 @@ function Checkout() {
             <h2 className="text-2xl">Pagamento</h2>
             <span className="eyebrow rounded-full bg-accent px-3 py-1 text-accent-foreground">Modo teste</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
-            {activeProvider.methods.map((m) => (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(["mercadopago", ...activeProvider.methods] as Method[]).map((m) => (
               <button type="button" key={m} onClick={() => setMethod(m)}
                 className={`border py-3 text-sm transition ${method === m ? "border-primary bg-primary text-primary-foreground" : "hover:border-primary"}`}>
                 {METHOD_LABEL[m]}
