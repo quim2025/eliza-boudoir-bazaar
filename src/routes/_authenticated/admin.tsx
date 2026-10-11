@@ -51,6 +51,15 @@ import {
   MessageCircle,
   Search,
   Check,
+  User,
+  UserCheck,
+  Eye,
+  MapPin,
+  Calendar,
+  CreditCard,
+  ShoppingBag,
+  FileText,
+  Phone,
 } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/admin")({
@@ -137,6 +146,64 @@ const SAMPLE_MOCK_ORDER = {
   ],
 };
 
+const SAMPLE_MOCK_CUSTOMER = {
+  id: "usr_mock_1",
+  full_name: "Mariana Albuquerque",
+  cpf: "123.456.789-00",
+  phone: "(11) 98765-4321",
+  birth_date: "1994-08-15",
+  cep: "01420-000",
+  street: "Alameda dos Anjos",
+  number: "142",
+  complement: "Apto 32",
+  neighborhood: "Jardins",
+  city: "São Paulo",
+  state: "SP",
+  delivery_notes: "Portaria 24h, deixar na recepção do condomínio.",
+  created_at: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
+  updated_at: new Date().toISOString(),
+};
+
+export interface CustomerAccountDetails {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  cpf: string;
+  birthDate?: string;
+  cep: string;
+  street: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+  deliveryNotes?: string;
+  createdAt?: string;
+}
+
+export interface AdminOrderItem {
+  id?: string;
+  order_id?: string;
+  product_name: string;
+  size?: string;
+  color?: string;
+  quantity: number;
+  unit_price?: number;
+}
+
+export interface AdminOrderSummary {
+  id: string;
+  user_id: string;
+  status: string;
+  payment_method?: string;
+  payment_status?: string;
+  total?: number | string;
+  created_at: string;
+  shipping_address?: Record<string, unknown> | null;
+  order_items?: AdminOrderItem[] | null;
+}
+
 function AdminPanel() {
   const qc = useQueryClient();
   const sendEmailFn = useServerFn(sendOrderStatusEmail);
@@ -182,14 +249,15 @@ function AdminPanel() {
           .from("profiles")
           .select("*")
           .order("created_at", { ascending: false });
-        return res.data ?? [];
+        if (res.data && res.data.length > 0) return res.data;
+        return [SAMPLE_MOCK_CUSTOMER];
       } catch {
-        return [];
+        return [SAMPLE_MOCK_CUSTOMER];
       }
     },
   });
 
-  // Dialog States
+  // Product Dialog States
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<MockProduct | null>(null);
   const [deleteProductConfirm, setDeleteProductConfirm] = useState<MockProduct | null>(null);
@@ -201,6 +269,12 @@ function AdminPanel() {
   const [emailTargetStatus, setEmailTargetStatus] = useState("enviado");
   const [emailTrackingCode, setEmailTrackingCode] = useState("");
   const [emailSending, setEmailSending] = useState(false);
+
+  // Customer Account Dialog State
+  const [customerAccountModalOpen, setCustomerAccountModalOpen] = useState(false);
+  const [selectedCustomerAccount, setSelectedCustomerAccount] =
+    useState<CustomerAccountDetails | null>(null);
+  const [selectedCustomerOrders, setSelectedCustomerOrders] = useState<OrderWithItems[]>([]);
 
   // Search & Filters for Products
   const [productSearch, setProductSearch] = useState("");
@@ -229,11 +303,81 @@ function AdminPanel() {
   const openEmailModal = (order: OrderWithItems, initialStatus?: string) => {
     setSelectedOrderForEmail(order);
     setEmailTargetStatus(initialStatus || order.status || "enviado");
-    // CRITICAL per user requirement:
-    // "o campo de rastreio da caixa de email padrão não deve ser preenchido pois o administrador preencherá com o rastreio fornecido pela transportadora"
-    // Starts blank!
+    // Starts blank as required
     setEmailTrackingCode("");
     setEmailModalOpen(true);
+  };
+
+  // Handler to open customer account modal from any order
+  const openCustomerAccount = (order: OrderWithItems) => {
+    const addr = (order.shipping_address as Record<string, string>) || {};
+    const foundProfile = customers.find((c) => c.id === order.user_id);
+    const resolvedName = addr["recipient"] || foundProfile?.full_name || "Cliente Eliza";
+    const resolvedPhone = addr["phone"] || foundProfile?.phone || "";
+    const resolvedEmail =
+      addr["email"] ||
+      (foundProfile as { email?: string } | undefined)?.email ||
+      `cliente_${order.user_id.slice(0, 6)}@email.com`;
+
+    const accountData: CustomerAccountDetails = {
+      id: order.user_id,
+      fullName: resolvedName,
+      email: resolvedEmail,
+      phone: resolvedPhone,
+      cpf: foundProfile?.cpf || addr["cpf"] || "",
+      birthDate: foundProfile?.birth_date || "",
+      cep: foundProfile?.cep || addr["cep"] || "",
+      street: foundProfile?.street || addr["street"] || "",
+      number: foundProfile?.number || addr["number"] || "",
+      complement: foundProfile?.complement || addr["complement"] || "",
+      neighborhood: foundProfile?.neighborhood || addr["neighborhood"] || "",
+      city: foundProfile?.city || addr["city"] || "",
+      state: foundProfile?.state || addr["state"] || "",
+      deliveryNotes: foundProfile?.delivery_notes || addr["delivery_notes"] || "",
+      createdAt: foundProfile?.created_at || order.created_at,
+    };
+
+    // Filter all orders by this customer
+    const clientOrders = orders.filter(
+      (o) =>
+        o.user_id === order.user_id ||
+        (o.shipping_address as Record<string, string>)?.["recipient"] === resolvedName,
+    );
+
+    setSelectedCustomerAccount(accountData);
+    setSelectedCustomerOrders(clientOrders);
+    setCustomerAccountModalOpen(true);
+  };
+
+  // Handler to open customer account modal directly from profile
+  const openCustomerAccountFromProfile = (customerProfile: (typeof customers)[number]) => {
+    const clientOrders = orders.filter((o) => o.user_id === customerProfile.id);
+    const lastOrderAddr = (clientOrders[0]?.shipping_address as Record<string, string>) || {};
+
+    const accountData: CustomerAccountDetails = {
+      id: customerProfile.id,
+      fullName: customerProfile.full_name || lastOrderAddr["recipient"] || "Cliente Eliza",
+      email:
+        (customerProfile as { email?: string })?.email ||
+        lastOrderAddr["email"] ||
+        `cliente_${customerProfile.id.slice(0, 6)}@email.com`,
+      phone: customerProfile.phone || lastOrderAddr["phone"] || "",
+      cpf: customerProfile.cpf || lastOrderAddr["cpf"] || "",
+      birthDate: customerProfile.birth_date || "",
+      cep: customerProfile.cep || lastOrderAddr["cep"] || "",
+      street: customerProfile.street || lastOrderAddr["street"] || "",
+      number: customerProfile.number || lastOrderAddr["number"] || "",
+      complement: customerProfile.complement || lastOrderAddr["complement"] || "",
+      neighborhood: customerProfile.neighborhood || lastOrderAddr["neighborhood"] || "",
+      city: customerProfile.city || lastOrderAddr["city"] || "",
+      state: customerProfile.state || lastOrderAddr["state"] || "",
+      deliveryNotes: customerProfile.delivery_notes || lastOrderAddr["delivery_notes"] || "",
+      createdAt: customerProfile.created_at,
+    };
+
+    setSelectedCustomerAccount(accountData);
+    setSelectedCustomerOrders(clientOrders);
+    setCustomerAccountModalOpen(true);
   };
 
   // Handler to confirm status and send email
@@ -244,7 +388,6 @@ function AdminPanel() {
     const addr = (selectedOrderForEmail.shipping_address as Record<string, string>) || {};
     const recipientName =
       addr["recipient"] || customerName(selectedOrderForEmail.user_id) || "Cliente";
-    const recipientPhone = addr["phone"] || "";
 
     const emailDetails = generateOrderNotificationEmail({
       orderId: selectedOrderForEmail.id,
@@ -257,7 +400,6 @@ function AdminPanel() {
     });
 
     try {
-      // 1. Dispatch email server function
       await sendEmailFn({
         data: {
           orderId: selectedOrderForEmail.id,
@@ -271,7 +413,6 @@ function AdminPanel() {
         },
       });
 
-      // 2. Update Supabase order status & tracking
       try {
         const updatedAddress = {
           ...addr,
@@ -360,13 +501,13 @@ function AdminPanel() {
       </div>
 
       {/* Main Tabs */}
-      <Tabs defaultValue="produtos" className="mt-10">
+      <Tabs defaultValue="pedidos" className="mt-10">
         <TabsList className="w-full justify-start overflow-x-auto h-auto p-1 bg-muted/60 border rounded-none">
-          <TabsTrigger value="produtos" className="rounded-none px-4 py-2 font-medium">
-            Catálogo & CRUD
-          </TabsTrigger>
           <TabsTrigger value="pedidos" className="rounded-none px-4 py-2 font-medium">
             Pedidos & Rastreio ({orders.length})
+          </TabsTrigger>
+          <TabsTrigger value="produtos" className="rounded-none px-4 py-2 font-medium">
+            Catálogo & CRUD
           </TabsTrigger>
           <TabsTrigger value="estoque" className="rounded-none px-4 py-2 font-medium">
             Estoque Rápido
@@ -376,9 +517,293 @@ function AdminPanel() {
           </TabsTrigger>
         </TabsList>
 
+        {/* ----------------- TAB: PEDIDOS & RASTREIO ----------------- */}
+        <TabsContent value="pedidos" className="mt-6 space-y-4">
+          <div className="border bg-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+            <div>
+              <p className="font-medium text-foreground">Gestão de Pedidos, Clientes & Rastreio</p>
+              <p className="text-xs text-muted-foreground">
+                Clique no nome do cliente ou no botão &quot;Conta&quot; para acessar o perfil
+                completo do comprador. Para enviar e-mail com rastreio, clique em &quot;Notificar
+                Cliente&quot;.
+              </p>
+            </div>
+            <div className="text-xs text-muted-foreground border-l pl-3 hidden sm:block">
+              {orders.length} pedidos registrados
+            </div>
+          </div>
+
+          {/* Desktop Orders Table */}
+          <div className="hidden md:block overflow-x-auto border bg-card">
+            <table className="w-full text-sm">
+              <thead className="bg-muted text-left eyebrow border-b">
+                <tr>
+                  <th className="p-3">Pedido</th>
+                  <th className="p-3">Cliente & Contato</th>
+                  <th className="p-3">Itens Comprados</th>
+                  <th className="p-3">Pagamento</th>
+                  <th className="p-3">Total</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {orders.map((o) => {
+                  const a = (o.shipping_address as Record<string, string>) || {};
+                  const tracking = a["tracking_code"] || "";
+                  const cName = a["recipient"] || customerName(o.user_id);
+
+                  return (
+                    <tr key={o.id} className="align-top hover:bg-muted/30 transition-colors">
+                      <td className="p-3 whitespace-nowrap">
+                        <span className="font-mono font-semibold">
+                          #{o.id.slice(0, 8).toUpperCase()}
+                        </span>
+                        <div className="text-xs text-muted-foreground">{dateBR(o.created_at)}</div>
+                        {tracking && (
+                          <div className="mt-1 flex items-center gap-1 text-[11px] text-primary font-mono bg-primary/10 px-1.5 py-0.5 rounded-sm w-fit">
+                            <Truck className="h-3 w-3" />
+                            {tracking}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Cliente com link de acesso rápido à conta */}
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={() => openCustomerAccount(o)}
+                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5 group text-left cursor-pointer"
+                          title="Clique para ver os dados da conta deste cliente"
+                        >
+                          <span className="underline decoration-dotted underline-offset-2">
+                            {cName}
+                          </span>
+                          <User className="h-3.5 w-3.5 text-primary opacity-70 group-hover:opacity-100 shrink-0" />
+                        </button>
+
+                        <div className="text-xs text-muted-foreground space-y-0.5 mt-1">
+                          {a["phone"] && (
+                            <a
+                              href={`https://wa.me/55${a["phone"].replace(/\D/g, "")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-emerald-700 hover:underline flex items-center gap-1"
+                            >
+                              <MessageCircle className="h-3 w-3 inline" />
+                              {a["phone"]}
+                            </a>
+                          )}
+                          <div>
+                            {a["street"]}, {a["number"]} — {a["city"]}/{a["state"]}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openCustomerAccount(o)}
+                            className="text-[11px] text-primary hover:underline font-medium flex items-center gap-1 mt-1 cursor-pointer"
+                          >
+                            <Eye className="h-3 w-3" />
+                            <span>Ver dados da conta</span>
+                          </button>
+                        </div>
+                      </td>
+
+                      <td className="p-3">
+                        <div className="space-y-1 text-xs max-w-xs">
+                          {o.order_items?.map((i) => (
+                            <div key={i.id} className="text-foreground">
+                              <strong>{i.quantity}×</strong> {i.product_name}{" "}
+                              <span className="text-muted-foreground">
+                                ({i.size}, {i.color})
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap">
+                        <div className="font-medium capitalize">{o.payment_method}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {PAYMENT_LABEL[o.payment_status] ?? o.payment_status}
+                        </div>
+                      </td>
+
+                      <td className="p-3 whitespace-nowrap font-medium">{brl(Number(o.total))}</td>
+
+                      <td className="p-3">
+                        <select
+                          className="h-8 border bg-background px-2 text-xs rounded-none focus:outline-none"
+                          value={o.status}
+                          onChange={(e) => {
+                            const newSt = e.target.value;
+                            openEmailModal(o, newSt);
+                          }}
+                        >
+                          {ORDER_STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {STATUS_LABEL[s]}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td className="p-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openCustomerAccount(o)}
+                            className="rounded-none h-8 px-2.5 gap-1.5 hover:bg-muted"
+                            title="Acessar informações da conta do cliente"
+                          >
+                            <UserCheck className="h-3.5 w-3.5 text-primary" />
+                            <span>Conta</span>
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEmailModal(o)}
+                            className="rounded-none h-8 px-2.5 gap-1.5 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                            title="Atualizar status e enviar e-mail de rastreio"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                            <span>Notificar</span>
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {orders.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                      Nenhum pedido recebido ainda.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile Orders Cards (<768px) */}
+          <div className="block md:hidden space-y-4">
+            {orders.map((o) => {
+              const a = (o.shipping_address as Record<string, string>) || {};
+              const tracking = a["tracking_code"] || "";
+              const cName = a["recipient"] || customerName(o.user_id);
+
+              return (
+                <div key={o.id} className="border bg-card p-4 space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="font-mono font-bold text-sm">
+                        #{o.id.slice(0, 8).toUpperCase()}
+                      </span>
+                      <p className="text-xs text-muted-foreground">{dateBR(o.created_at)}</p>
+                    </div>
+                    <span className="font-semibold text-primary">{brl(Number(o.total))}</span>
+                  </div>
+
+                  <div className="text-xs border-y py-2 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => openCustomerAccount(o)}
+                        className="font-semibold text-foreground flex items-center gap-1 text-left"
+                      >
+                        <span className="underline decoration-dotted">{cName}</span>
+                        <User className="h-3.5 w-3.5 text-primary" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openCustomerAccount(o)}
+                        className="text-xs text-primary font-medium flex items-center gap-1"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Ver conta
+                      </button>
+                    </div>
+
+                    {a["phone"] && (
+                      <a
+                        href={`https://wa.me/55${a["phone"].replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-emerald-700 flex items-center gap-1 font-medium"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        {a["phone"]} (WhatsApp)
+                      </a>
+                    )}
+                    <p className="text-muted-foreground">
+                      {a["street"]}, {a["number"]} — {a["city"]}/{a["state"]}
+                    </p>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openCustomerAccount(o)}
+                      className="rounded-none w-full gap-2 text-xs h-8 border-dashed mt-2"
+                    >
+                      <UserCheck className="h-3.5 w-3.5 text-primary" />
+                      <span>Ver Informações da Conta do Cliente</span>
+                    </Button>
+                  </div>
+
+                  <div className="text-xs space-y-1">
+                    <p className="eyebrow text-muted-foreground">Itens:</p>
+                    {o.order_items?.map((i) => (
+                      <div key={i.id} className="flex justify-between">
+                        <span>
+                          {i.quantity}× {i.product_name} ({i.size}, {i.color})
+                        </span>
+                        {i.unit_price && <span>{brl(Number(i.unit_price) * i.quantity)}</span>}
+                      </div>
+                    ))}
+                  </div>
+
+                  {tracking && (
+                    <div className="flex items-center gap-1 text-xs text-primary font-mono bg-primary/10 p-2 rounded-sm">
+                      <Truck className="h-3.5 w-3.5 shrink-0" />
+                      <span>Rastreio: {tracking}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs eyebrow text-muted-foreground">Status:</span>
+                      <select
+                        className="h-9 border bg-background px-2 text-xs rounded-none flex-1"
+                        value={o.status}
+                        onChange={(e) => openEmailModal(o, e.target.value)}
+                      >
+                        {ORDER_STATUSES.map((s) => (
+                          <option key={s} value={s}>
+                            {STATUS_LABEL[s]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openEmailModal(o)}
+                      className="rounded-none w-full gap-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground h-9"
+                    >
+                      <Mail className="h-4 w-4" />
+                      <span>Alterar Status & Notificar por E-mail</span>
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </TabsContent>
+
         {/* ----------------- TAB: PRODUTOS (CRUD) ----------------- */}
         <TabsContent value="produtos" className="mt-6 space-y-6">
-          {/* Controls Bar */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-card p-4 border">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -434,9 +859,6 @@ function AdminPanel() {
                 {filteredProducts.map((p) => {
                   const variants = p.product_variants ?? [];
                   const totalUnits = variants.reduce((acc, v) => acc + (v.stock || 0), 0);
-                  const colors = Array.from(
-                    new Map(variants.map((v) => [v.color, v.color_hex])).entries(),
-                  );
 
                   return (
                     <tr key={p.id} className="hover:bg-muted/40 transition-colors">
@@ -604,223 +1026,6 @@ function AdminPanel() {
           </div>
         </TabsContent>
 
-        {/* ----------------- TAB: PEDIDOS & RASTREIO ----------------- */}
-        <TabsContent value="pedidos" className="mt-6 space-y-4">
-          <div className="border bg-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
-            <div>
-              <p className="font-medium text-foreground">Gestão de Pedidos & Envio de E-mails</p>
-              <p className="text-xs text-muted-foreground">
-                Ao alterar o status para &quot;Enviado&quot; ou qualquer outro, você pode inserir o
-                código de rastreio e disparar o e-mail de notificação para o cliente.
-              </p>
-            </div>
-            <div className="text-xs text-muted-foreground border-l pl-3 hidden sm:block">
-              {orders.length} pedidos registrados
-            </div>
-          </div>
-
-          {/* Desktop Orders Table */}
-          <div className="hidden md:block overflow-x-auto border bg-card">
-            <table className="w-full text-sm">
-              <thead className="bg-muted text-left eyebrow border-b">
-                <tr>
-                  <th className="p-3">Pedido</th>
-                  <th className="p-3">Cliente & Contato</th>
-                  <th className="p-3">Itens Comprados</th>
-                  <th className="p-3">Pagamento</th>
-                  <th className="p-3">Total</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Ação / E-mail</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {orders.map((o) => {
-                  const a = (o.shipping_address as Record<string, string>) || {};
-                  const tracking = a["tracking_code"] || "";
-                  const cName = a["recipient"] || customerName(o.user_id);
-
-                  return (
-                    <tr key={o.id} className="align-top hover:bg-muted/30 transition-colors">
-                      <td className="p-3 whitespace-nowrap">
-                        <span className="font-mono font-semibold">
-                          #{o.id.slice(0, 8).toUpperCase()}
-                        </span>
-                        <div className="text-xs text-muted-foreground">{dateBR(o.created_at)}</div>
-                        {tracking && (
-                          <div className="mt-1 flex items-center gap-1 text-[11px] text-primary font-mono bg-primary/10 px-1.5 py-0.5 rounded-sm w-fit">
-                            <Truck className="h-3 w-3" />
-                            {tracking}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <p className="font-medium text-foreground">{cName}</p>
-                        <div className="text-xs text-muted-foreground space-y-0.5 mt-0.5">
-                          {a["phone"] && (
-                            <a
-                              href={`https://wa.me/55${a["phone"].replace(/\D/g, "")}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-emerald-700 hover:underline flex items-center gap-1"
-                            >
-                              <MessageCircle className="h-3 w-3 inline" />
-                              {a["phone"]}
-                            </a>
-                          )}
-                          <div>
-                            {a["street"]}, {a["number"]} — {a["city"]}/{a["state"]}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <div className="space-y-1 text-xs max-w-xs">
-                          {o.order_items?.map((i) => (
-                            <div key={i.id} className="text-foreground">
-                              <strong>{i.quantity}×</strong> {i.product_name}{" "}
-                              <span className="text-muted-foreground">
-                                ({i.size}, {i.color})
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="p-3 whitespace-nowrap">
-                        <div className="font-medium capitalize">{o.payment_method}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {PAYMENT_LABEL[o.payment_status] ?? o.payment_status}
-                        </div>
-                      </td>
-                      <td className="p-3 whitespace-nowrap font-medium">{brl(Number(o.total))}</td>
-                      <td className="p-3">
-                        <select
-                          className="h-8 border bg-background px-2 text-xs rounded-none focus:outline-none"
-                          value={o.status}
-                          onChange={(e) => {
-                            const newSt = e.target.value;
-                            // Prompt with email dialog
-                            openEmailModal(o, newSt);
-                          }}
-                        >
-                          {ORDER_STATUSES.map((s) => (
-                            <option key={s} value={s}>
-                              {STATUS_LABEL[s]}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="p-3 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openEmailModal(o)}
-                          className="rounded-none h-8 px-2.5 gap-1.5 border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-                        >
-                          <Mail className="h-3.5 w-3.5" />
-                          <span>Notificar Cliente</span>
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {orders.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="p-8 text-center text-muted-foreground">
-                      Nenhum pedido recebido ainda.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Orders Cards (<768px) */}
-          <div className="block md:hidden space-y-4">
-            {orders.map((o) => {
-              const a = (o.shipping_address as Record<string, string>) || {};
-              const tracking = a["tracking_code"] || "";
-              const cName = a["recipient"] || customerName(o.user_id);
-
-              return (
-                <div key={o.id} className="border bg-card p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="font-mono font-bold text-sm">
-                        #{o.id.slice(0, 8).toUpperCase()}
-                      </span>
-                      <p className="text-xs text-muted-foreground">{dateBR(o.created_at)}</p>
-                    </div>
-                    <span className="font-semibold text-primary">{brl(Number(o.total))}</span>
-                  </div>
-
-                  <div className="text-xs border-y py-2 space-y-1">
-                    <p className="font-medium text-foreground">{cName}</p>
-                    {a["phone"] && (
-                      <a
-                        href={`https://wa.me/55${a["phone"].replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-emerald-700 flex items-center gap-1 font-medium"
-                      >
-                        <MessageCircle className="h-3.5 w-3.5" />
-                        {a["phone"]} (WhatsApp)
-                      </a>
-                    )}
-                    <p className="text-muted-foreground">
-                      {a["street"]}, {a["number"]} — {a["city"]}/{a["state"]}
-                    </p>
-                  </div>
-
-                  <div className="text-xs space-y-1">
-                    <p className="eyebrow text-muted-foreground">Itens:</p>
-                    {o.order_items?.map((i) => (
-                      <div key={i.id} className="flex justify-between">
-                        <span>
-                          {i.quantity}× {i.product_name} ({i.size}, {i.color})
-                        </span>
-                        {i.unit_price && <span>{brl(Number(i.unit_price) * i.quantity)}</span>}
-                      </div>
-                    ))}
-                  </div>
-
-                  {tracking && (
-                    <div className="flex items-center gap-1 text-xs text-primary font-mono bg-primary/10 p-2 rounded-sm">
-                      <Truck className="h-3.5 w-3.5 shrink-0" />
-                      <span>Rastreio: {tracking}</span>
-                    </div>
-                  )}
-
-                  <div className="pt-2 flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs eyebrow text-muted-foreground">Status:</span>
-                      <select
-                        className="h-9 border bg-background px-2 text-xs rounded-none flex-1"
-                        value={o.status}
-                        onChange={(e) => openEmailModal(o, e.target.value)}
-                      >
-                        {ORDER_STATUSES.map((s) => (
-                          <option key={s} value={s}>
-                            {STATUS_LABEL[s]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openEmailModal(o)}
-                      className="rounded-none w-full gap-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground h-9"
-                    >
-                      <Mail className="h-4 w-4" />
-                      <span>Alterar Status & Notificar por E-mail</span>
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </TabsContent>
-
         {/* ----------------- TAB: ESTOQUE RÁPIDO ----------------- */}
         <TabsContent value="estoque" className="mt-6 space-y-6">
           {products.map((p) => (
@@ -864,8 +1069,22 @@ function AdminPanel() {
         </TabsContent>
 
         {/* ----------------- TAB: CLIENTES ----------------- */}
-        <TabsContent value="clientes" className="mt-6">
-          <div className="overflow-x-auto border bg-card">
+        <TabsContent value="clientes" className="mt-6 space-y-4">
+          <div className="border bg-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
+            <div>
+              <p className="font-medium text-foreground">Base de Clientes Eliza Lingerie</p>
+              <p className="text-xs text-muted-foreground">
+                Consulte cadastros completos, endereços de entrega, CPFs e histórico de compras de
+                cada cliente.
+              </p>
+            </div>
+            <div className="text-xs text-muted-foreground border-l pl-3 hidden sm:block">
+              {customers.length} clientes cadastrados
+            </div>
+          </div>
+
+          {/* Desktop Clientes Table */}
+          <div className="hidden md:block overflow-x-auto border bg-card">
             <table className="w-full text-sm">
               <thead className="bg-muted text-left eyebrow border-b">
                 <tr>
@@ -873,63 +1092,164 @@ function AdminPanel() {
                   <th className="p-3">Telefone</th>
                   <th className="p-3">CPF</th>
                   <th className="p-3">Endereço</th>
-                  <th className="p-3 text-right">Pedidos</th>
+                  <th className="p-3 text-center">Pedidos</th>
+                  <th className="p-3 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {customers.map((c) => (
-                  <tr key={c.id} className="align-top hover:bg-muted/30 transition-colors">
-                    <td className="p-3">
-                      <p className="font-medium text-foreground">{c.full_name || "—"}</p>
-                      <div className="text-xs text-muted-foreground">
-                        Cadastrado desde {dateBR(c.created_at)}
-                      </div>
-                    </td>
-                    <td className="p-3">
-                      {c.phone ? (
-                        <a
-                          className="text-emerald-700 hover:underline flex items-center gap-1"
-                          href={`https://wa.me/55${c.phone.replace(/\D/g, "")}`}
-                          target="_blank"
-                          rel="noreferrer"
+                {customers.map((c) => {
+                  const clientOrdersCount = orders.filter((o) => o.user_id === c.id).length;
+                  return (
+                    <tr key={c.id} className="align-top hover:bg-muted/30 transition-colors">
+                      <td className="p-3">
+                        <button
+                          type="button"
+                          onClick={() => openCustomerAccountFromProfile(c)}
+                          className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1.5 group text-left cursor-pointer"
+                          title="Clique para ver os dados da conta deste cliente"
                         >
-                          <MessageCircle className="h-3 w-3 inline" />
-                          {c.phone}
-                        </a>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="p-3 text-muted-foreground">{c.cpf || "—"}</td>
-                    <td className="p-3 text-xs max-w-xs">
-                      {c.street ? (
-                        <div>
-                          {c.street}, {c.number} — {c.neighborhood}, {c.city}/{c.state} · CEP{" "}
-                          {c.cep}
-                          {c.delivery_notes && (
-                            <div className="text-muted-foreground mt-0.5">
-                              Obs: {c.delivery_notes}
-                            </div>
-                          )}
+                          <span className="underline decoration-dotted underline-offset-2">
+                            {c.full_name || "—"}
+                          </span>
+                          <User className="h-3.5 w-3.5 text-primary opacity-70 group-hover:opacity-100 shrink-0" />
+                        </button>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          Cadastrado desde {dateBR(c.created_at)}
                         </div>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="p-3 text-right font-medium">
-                      {orders.filter((o) => o.user_id === c.id).length}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-3 whitespace-nowrap">
+                        {c.phone ? (
+                          <a
+                            className="text-emerald-700 hover:underline flex items-center gap-1"
+                            href={`https://wa.me/55${c.phone.replace(/\D/g, "")}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <MessageCircle className="h-3 w-3 inline" />
+                            {c.phone}
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="p-3 text-muted-foreground font-mono text-xs whitespace-nowrap">
+                        {c.cpf || "—"}
+                      </td>
+                      <td className="p-3 text-xs max-w-xs">
+                        {c.street ? (
+                          <div>
+                            {c.street}, {c.number || "S/N"} — {c.neighborhood}, {c.city}/{c.state} ·
+                            CEP {c.cep}
+                            {c.delivery_notes && (
+                              <div className="text-muted-foreground mt-0.5">
+                                Obs: {c.delivery_notes}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="p-3 text-center font-medium">
+                        <span className="inline-block px-2 py-0.5 rounded-sm bg-muted text-xs font-semibold">
+                          {clientOrdersCount}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right whitespace-nowrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openCustomerAccountFromProfile(c)}
+                          className="rounded-none h-8 px-2.5 gap-1.5 hover:bg-muted"
+                          title="Acessar informações da conta do cliente"
+                        >
+                          <UserCheck className="h-3.5 w-3.5 text-primary" />
+                          <span>Ver Conta</span>
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {customers.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
                       Nenhum cliente cadastrado ainda.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Clientes Cards (< 768px) */}
+          <div className="block md:hidden space-y-3">
+            {customers.map((c) => {
+              const clientOrdersCount = orders.filter((o) => o.user_id === c.id).length;
+              return (
+                <div key={c.id} className="border bg-card p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => openCustomerAccountFromProfile(c)}
+                        className="font-display text-lg font-medium text-foreground hover:text-primary flex items-center gap-1.5 text-left"
+                      >
+                        <span className="underline decoration-dotted">{c.full_name || "—"}</span>
+                        <User className="h-4 w-4 text-primary shrink-0" />
+                      </button>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Cadastrado desde {dateBR(c.created_at)}
+                      </p>
+                    </div>
+                    <span className="text-xs bg-primary/10 text-primary font-semibold px-2 py-0.5 rounded-sm">
+                      {clientOrdersCount} {clientOrdersCount === 1 ? "pedido" : "pedidos"}
+                    </span>
+                  </div>
+
+                  <div className="text-xs border-y py-2 space-y-1">
+                    {c.phone && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Telefone:</span>
+                        <a
+                          href={`https://wa.me/55${c.phone.replace(/\D/g, "")}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-emerald-700 font-semibold flex items-center gap-1 hover:underline"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          {c.phone}
+                        </a>
+                      </div>
+                    )}
+
+                    {c.cpf && (
+                      <div className="flex items-center justify-between font-mono">
+                        <span className="text-muted-foreground font-sans">CPF:</span>
+                        <span>{c.cpf}</span>
+                      </div>
+                    )}
+
+                    {c.street && (
+                      <div className="text-muted-foreground pt-1">
+                        {c.street}, {c.number || "S/N"} — {c.neighborhood}, {c.city}/{c.state} ·{" "}
+                        {c.cep}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openCustomerAccountFromProfile(c)}
+                    className="rounded-none w-full gap-2 text-xs h-9"
+                  >
+                    <UserCheck className="h-3.5 w-3.5 text-primary" />
+                    <span>Ver Informações da Conta Completa</span>
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </TabsContent>
       </Tabs>
@@ -992,7 +1312,6 @@ function AdminPanel() {
             </DialogHeader>
 
             <div className="space-y-4 mt-2">
-              {/* Status Selector */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-xs uppercase tracking-wider font-semibold">
@@ -1011,7 +1330,6 @@ function AdminPanel() {
                   </select>
                 </div>
 
-                {/* TRACKING CODE: Starts completely empty as requested */}
                 <div>
                   <Label className="text-xs uppercase tracking-wider font-semibold flex items-center justify-between">
                     <span>Código de Rastreio</span>
@@ -1031,7 +1349,6 @@ function AdminPanel() {
                 </div>
               </div>
 
-              {/* LIVE EMAIL PREVIEW */}
               {(() => {
                 const addr =
                   (selectedOrderForEmail.shipping_address as Record<string, string>) || {};
@@ -1136,7 +1453,314 @@ function AdminPanel() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* ============================================================== */}
+      {/* MODAL 3: INFORMAÇÕES DA CONTA DO CLIENTE (ATRAVÉS DOS PEDIDOS) */}
+      {/* ============================================================== */}
+      <CustomerAccountDialog
+        open={customerAccountModalOpen}
+        onOpenChange={setCustomerAccountModalOpen}
+        customer={selectedCustomerAccount}
+        orders={selectedCustomerOrders}
+      />
     </div>
+  );
+}
+
+// -------------------------------------------------------------
+// COMPONENTE: DIALOG DE INFORMAÇÕES DA CONTA DO CLIENTE
+// -------------------------------------------------------------
+interface CustomerAccountDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customer: CustomerAccountDetails | null;
+  orders: AdminOrderSummary[];
+}
+
+function CustomerAccountDialog({
+  open,
+  onOpenChange,
+  customer,
+  orders,
+}: CustomerAccountDialogProps) {
+  if (!customer) return null;
+
+  const totalSpent = orders.reduce((acc, o) => acc + Number(o.total || 0), 0);
+  const initials = customer.fullName
+    .split(" ")
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const handleCopyCustomerDossier = () => {
+    const text = `FICHA DO CLIENTE — ELIZA LINGERIE
+Nome: ${customer.fullName}
+E-mail: ${customer.email}
+Telefone: ${customer.phone || "Não informado"}
+CPF: ${customer.cpf || "Não informado"}
+${customer.birthDate ? `Data de Nascimento: ${dateBR(customer.birthDate)}` : ""}
+Endereço: ${customer.street}, ${customer.number || "S/N"}${customer.complement ? ` - ${customer.complement}` : ""}
+Bairro: ${customer.neighborhood} - ${customer.city}/${customer.state}
+CEP: ${customer.cep}
+${customer.deliveryNotes ? `Observações de Entrega: ${customer.deliveryNotes}` : ""}
+Total de Pedidos Realizados: ${orders.length}
+Faturamento Total deste Cliente: ${brl(totalSpent)}`;
+
+    navigator.clipboard.writeText(text);
+    toast.success("Dados cadastrais do cliente copiados para a área de transferência!");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-display text-2xl">
+            <UserCheck className="h-6 w-6 text-primary" />
+            <span>Informações da Conta do Cliente</span>
+          </DialogTitle>
+          <DialogDescription>
+            Dados cadastrais completos, endereço de entrega e histórico de pedidos na loja.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 mt-2">
+          {/* Header do Cliente com Avatar e Métricas */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-muted/30 border rounded-sm">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-full bg-primary text-primary-foreground font-display font-semibold flex items-center justify-center text-lg shrink-0">
+                {initials || "EL"}
+              </div>
+              <div>
+                <p className="font-display text-xl font-semibold text-foreground leading-tight">
+                  {customer.fullName}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  ID: <span className="font-mono">{customer.id.slice(0, 12)}...</span> · Cadastrado{" "}
+                  {customer.createdAt ? `desde ${dateBR(customer.createdAt)}` : ""}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap sm:flex-col items-start sm:items-end gap-1.5 border-t sm:border-t-0 pt-2 sm:pt-0">
+              <span className="text-xs bg-primary/10 text-primary font-medium px-2 py-0.5 rounded-sm">
+                {orders.length} {orders.length === 1 ? "pedido realizado" : "pedidos realizados"}
+              </span>
+              <span className="text-xs text-muted-foreground font-semibold">
+                Total Comprado: <strong className="text-foreground">{brl(totalSpent)}</strong>
+              </span>
+            </div>
+          </div>
+
+          {/* Cards de Dados Pessoais & Contato */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Card 1: Contato & Pessoais */}
+            <div className="border p-4 bg-card rounded-sm space-y-3">
+              <p className="eyebrow text-muted-foreground text-xs font-semibold flex items-center gap-1.5 border-b pb-1.5">
+                <FileText className="h-3.5 w-3.5 text-primary" />
+                <span>Dados de Contato</span>
+              </p>
+
+              <div className="text-xs space-y-2">
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">E-mail da Conta:</span>
+                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                    <span className="font-medium text-foreground truncate">{customer.email}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(customer.email);
+                        toast.success("E-mail copiado!");
+                      }}
+                      className="text-primary hover:opacity-80 p-0.5"
+                      title="Copiar e-mail"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">
+                    Telefone / Celular:
+                  </span>
+                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                    <span className="font-medium text-foreground">
+                      {customer.phone || "Não cadastrado"}
+                    </span>
+                    {customer.phone && (
+                      <a
+                        href={`https://wa.me/55${customer.phone.replace(/\D/g, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-semibold hover:underline bg-emerald-50 px-2 py-0.5 rounded-sm border border-emerald-200"
+                      >
+                        <MessageCircle className="h-3 w-3" />
+                        <span>WhatsApp</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">CPF:</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {customer.cpf || "Não informado"}
+                  </span>
+                </div>
+
+                {customer.birthDate && (
+                  <div>
+                    <span className="text-muted-foreground block text-[11px]">
+                      Data de Nascimento:
+                    </span>
+                    <span className="font-medium text-foreground">
+                      {dateBR(customer.birthDate)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Card 2: Endereço de Entrega */}
+            <div className="border p-4 bg-card rounded-sm space-y-3">
+              <p className="eyebrow text-muted-foreground text-xs font-semibold flex items-center gap-1.5 border-b pb-1.5">
+                <MapPin className="h-3.5 w-3.5 text-primary" />
+                <span>Endereço Cadastrado</span>
+              </p>
+
+              <div className="text-xs space-y-2">
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">CEP:</span>
+                  <span className="font-mono font-medium text-foreground">
+                    {customer.cep || "Não informado"}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Logradouro:</span>
+                  <span className="font-medium text-foreground">
+                    {customer.street
+                      ? `${customer.street}, ${customer.number || "S/N"}`
+                      : "Endereço não cadastrado"}
+                    {customer.complement ? ` (${customer.complement})` : ""}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Bairro:</span>
+                  <span className="font-medium text-foreground">
+                    {customer.neighborhood || "—"}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-muted-foreground block text-[11px]">Cidade / Estado:</span>
+                  <span className="font-medium text-foreground">
+                    {customer.city ? `${customer.city} / ${customer.state}` : "—"}
+                  </span>
+                </div>
+
+                {customer.deliveryNotes && (
+                  <div className="bg-muted/40 p-2 rounded-sm border">
+                    <span className="text-muted-foreground block text-[11px] font-semibold">
+                      Observação de Entrega:
+                    </span>
+                    <span className="text-[11px] text-foreground">{customer.deliveryNotes}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Histórico de Pedidos deste Cliente */}
+          <div className="border p-4 bg-card rounded-sm space-y-3">
+            <div className="flex items-center justify-between border-b pb-2">
+              <p className="eyebrow text-muted-foreground text-xs font-semibold flex items-center gap-1.5">
+                <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                <span>Histórico de Pedidos ({orders.length})</span>
+              </p>
+              <span className="text-xs font-medium text-primary">Total: {brl(totalSpent)}</span>
+            </div>
+
+            <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
+              {orders.map((o) => (
+                <div
+                  key={o.id}
+                  className="p-3 border rounded-sm text-xs bg-background flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-muted/30"
+                >
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-foreground">
+                        #{o.id.slice(0, 8).toUpperCase()}
+                      </span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-sm border font-semibold bg-secondary/50">
+                        {STATUS_LABEL[o.status] ?? o.status}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">{dateBR(o.created_at)}</p>
+                    <div className="text-[11px] text-muted-foreground line-clamp-1">
+                      {o.order_items
+                        ?.map((it: AdminOrderItem) => `${it.quantity}× ${it.product_name}`)
+                        .join(", ")}
+                    </div>
+                  </div>
+
+                  <div className="text-right flex sm:flex-col items-center sm:items-end justify-between sm:justify-center">
+                    <span className="font-semibold text-foreground text-sm">
+                      {brl(Number(o.total))}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground capitalize">
+                      {o.payment_method}
+                    </span>
+                  </div>
+                </div>
+              ))}
+
+              {orders.length === 0 && (
+                <p className="text-xs text-center text-muted-foreground py-3">
+                  Nenhum pedido anterior encontrado para este cliente.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
+          {customer.phone && (
+            <a
+              href={`https://wa.me/55${customer.phone.replace(/\D/g, "")}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 h-10 px-4 bg-emerald-700 text-white hover:bg-emerald-800 text-xs font-semibold rounded-none transition-colors"
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span>Conversar no WhatsApp</span>
+            </a>
+          )}
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleCopyCustomerDossier}
+            className="rounded-none gap-1.5 text-xs h-10"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            <span>Copiar Ficha do Cliente</span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="default"
+            onClick={() => onOpenChange(false)}
+            className="rounded-none text-xs h-10"
+          >
+            Fechar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -1217,7 +1841,6 @@ function ProductFormDialog({
       setImageMode("preset");
       setImageKey("lingerie");
       setCustomImageUrl("");
-      // Default variants for new product
       setVariants([
         {
           id: `v_p_${Date.now()}`,
@@ -1247,14 +1870,12 @@ function ProductFormDialog({
     }
   };
 
-  // Sync whenever dialog opens or initialProduct changes
   const prevOpenRef = useRef(false);
   if (open && !prevOpenRef.current) {
     syncFromProduct(initialProduct);
   }
   prevOpenRef.current = open;
 
-  // Handle image file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1280,7 +1901,6 @@ function ProductFormDialog({
     reader.readAsDataURL(file);
   };
 
-  // Add a variant
   const handleAddVariant = () => {
     if (!newSize.trim()) return toast.error("Informe o tamanho");
     if (!newColorName.trim()) return toast.error("Informe a cor");
@@ -1307,7 +1927,6 @@ function ProductFormDialog({
     toast.success(`Tamanho ${newSize} (${newColorName}) adicionado!`);
   };
 
-  // Quick add multiple sizes
   const handleQuickAddSizes = (sizesList: string[]) => {
     const newItems: MockProductVariant[] = [];
     sizesList.forEach((s) => {
@@ -1331,7 +1950,6 @@ function ProductFormDialog({
     }
   };
 
-  // Remove variant
   const handleRemoveVariant = (id: string) => {
     if (variants.length <= 1) {
       return toast.error("O produto precisa de pelo menos uma variação com tamanho e cor.");
@@ -1339,7 +1957,6 @@ function ProductFormDialog({
     setVariants(variants.filter((v) => v.id !== id));
   };
 
-  // Save Product
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return toast.error("Nome do produto é obrigatório.");
@@ -1356,7 +1973,6 @@ function ProductFormDialog({
     try {
       const productId = initialProduct?.id || `prod_${Date.now()}`;
 
-      // 1. Save to Supabase if connected
       try {
         const prodPayload = {
           id: productId,
@@ -1369,7 +1985,6 @@ function ProductFormDialog({
         };
         await supabase.from("products").upsert(prodPayload);
 
-        // Upsert variants
         for (const v of variants) {
           await supabase.from("product_variants").upsert({
             id: v.id.startsWith("v_") || v.id.startsWith("var_") ? undefined : v.id,
@@ -1384,7 +1999,6 @@ function ProductFormDialog({
         console.warn("Aviso ao persistir no Supabase (fallback mock ativo):", err);
       }
 
-      // 2. Always persist locally so state updates seamlessly
       saveCustomProduct({
         id: productId,
         name: name.trim(),
@@ -1422,7 +2036,6 @@ function ProductFormDialog({
         </DialogHeader>
 
         <form onSubmit={handleSave} className="space-y-6 mt-2">
-          {/* Dados Básicos */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <Label className="text-xs uppercase tracking-wider font-semibold">
@@ -1492,9 +2105,7 @@ function ProductFormDialog({
             </div>
           </div>
 
-          {/* ============================================================== */}
-          {/* OPÇÃO DE INSERIR IMAGEM DO PRODUTO (Upload, URL ou Coleção)     */}
-          {/* ============================================================== */}
+          {/* INSERÇÃO DE IMAGEM */}
           <div className="border p-4 bg-card space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-3">
               <div>
@@ -1507,7 +2118,6 @@ function ProductFormDialog({
                 </p>
               </div>
 
-              {/* Botões seletores de modo */}
               <div className="inline-flex rounded-none border p-0.5 bg-muted text-xs">
                 <button
                   type="button"
@@ -1546,7 +2156,6 @@ function ProductFormDialog({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
-              {/* Preview da Imagem */}
               <div className="flex flex-col items-center">
                 <div className="w-32 h-40 border bg-muted rounded-sm overflow-hidden relative shadow-inner">
                   <img
@@ -1560,7 +2169,6 @@ function ProductFormDialog({
                 <span className="text-[11px] text-muted-foreground mt-1.5">Preview na Loja</span>
               </div>
 
-              {/* Opções conforme o modo */}
               <div className="sm:col-span-2 space-y-3">
                 {imageMode === "upload" && (
                   <div className="space-y-3">
@@ -1642,9 +2250,7 @@ function ProductFormDialog({
             </div>
           </div>
 
-          {/* ============================================================== */}
-          {/* VARIAÇÕES: TAMANHOS, CORES E ESTOQUE                          */}
-          {/* ============================================================== */}
+          {/* VARIAÇÕES */}
           <div className="border p-4 bg-card space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b pb-2">
               <div>
@@ -1656,7 +2262,6 @@ function ProductFormDialog({
                 </p>
               </div>
 
-              {/* Botões rápidos de tamanhos */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1 sm:pt-0">
                 <span className="text-[11px] text-muted-foreground mr-1">Rápido:</span>
                 <button
@@ -1677,7 +2282,6 @@ function ProductFormDialog({
               </div>
             </div>
 
-            {/* Inputs para nova variação */}
             <div className="bg-muted/40 p-3 rounded-sm space-y-3">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div>
@@ -1752,7 +2356,6 @@ function ProductFormDialog({
               </div>
             </div>
 
-            {/* Lista de variações adicionadas */}
             <div className="space-y-1.5 max-h-48 overflow-y-auto border p-2 rounded-sm bg-background">
               {variants.map((v, idx) => (
                 <div
@@ -1825,7 +2428,6 @@ function ProductFormDialog({
   );
 }
 
-// Estatística Simples
 function Stat({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
   return (
     <div className="border bg-card p-4 sm:p-5">
@@ -1837,7 +2439,6 @@ function Stat({ label, value, alert }: { label: string; value: string; alert?: b
   );
 }
 
-// Célula de Estoque Rápido
 function StockCell({
   id,
   label,
