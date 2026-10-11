@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { supabase, setLocalPreviewSession } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,52 +31,21 @@ function Cadastro() {
   const navigate = useNavigate();
   const [googleLoading, setGoogleLoading] = useState(false);
 
+  const set = (key: keyof typeof form, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
   const google = async () => {
     setGoogleLoading(true);
     try {
-      const { data, error: supaErr } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin },
+      const r = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
       });
-      if (!supaErr && data?.url && !data.url.includes("placeholder-project")) {
-        window.location.href = data.url;
+      if (r?.error) {
+        toast.error("Não foi possível conectar com o Google no momento.");
         return;
       }
-
-      try {
-        const r = await lovable.auth.signInWithOAuth("google", {
-          redirect_uri: window.location.origin,
-        });
-        if (r && !r.error) {
-          toast.success("Conta criada e autenticada com sucesso!");
-          navigate({ to: "/loja" });
-          return;
-        }
-      } catch (lErr) {
-        console.warn("[Cadastro] Lovable OAuth fallback:", lErr);
-      }
-
-      const clientEmail = form.email.trim() || "rafael22esteves@gmail.com";
-      const clientName = form.full_name.trim() || clientEmail.split("@")[0].replace(/\./g, " ");
-
-      setLocalPreviewSession({
-        id: "usr_" + clientEmail.replace(/[^a-zA-Z0-9]/g, "_"),
-        email: clientEmail,
-        user_metadata: {
-          full_name: clientName,
-          name: clientName,
-          cpf: form.cpf,
-          phone: form.phone,
-          ...addr,
-        },
-      });
-
-      toast.success(`Bem-vindo(a), ${clientName}!`);
-      if (clientEmail.toLowerCase() === "rafael22esteves@gmail.com") {
-        navigate({ to: "/admin" });
-      } else {
-        navigate({ to: "/loja" });
-      }
+      if (r?.redirected) return; // navegador está indo para o Google
+      toast.success("Conta criada e autenticada com sucesso!");
+      navigate({ to: "/loja" });
     } catch (err) {
       console.error("[Cadastro] Google error:", err);
       toast.error("Não foi possível conectar com o Google no momento.");

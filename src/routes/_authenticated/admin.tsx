@@ -1474,7 +1474,7 @@ interface CustomerAccountDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customer: CustomerAccountDetails | null;
-  orders: AdminOrderSummary[];
+  orders: any[];
 }
 
 function CustomerAccountDialog({
