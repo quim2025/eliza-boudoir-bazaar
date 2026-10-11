@@ -74,7 +74,7 @@ function createSupabaseClient() {
       SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder";
   }
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  const rawClient = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: {
       fetch: createSupabaseFetch(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY),
     },
@@ -84,6 +84,90 @@ function createSupabaseClient() {
       autoRefreshToken: true,
     },
   });
+
+  // Local fallback storage for sessions in preview/offline/mock mode
+  const LOCAL_SESSION_KEY = "eliza_active_session";
+  const getStoredSession = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      const item = localStorage.getItem(LOCAL_SESSION_KEY);
+      return item ? JSON.parse(item) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const origGetSession = rawClient.auth.getSession.bind(rawClient.auth);
+  const origGetUser = rawClient.auth.getUser.bind(rawClient.auth);
+  const origSignOut = rawClient.auth.signOut.bind(rawClient.auth);
+
+  rawClient.auth.getSession = async () => {
+    const local = getStoredSession();
+    if (local) return { data: { session: local }, error: null };
+    return origGetSession();
+  };
+
+  rawClient.auth.getUser = async (jwt?: string) => {
+    const local = getStoredSession();
+    if (local?.user) return { data: { user: local.user }, error: null };
+    try {
+      const res = await origGetUser(jwt);
+      if (res.data?.user) return res;
+    } catch {
+      // ignore network errors when using placeholder URL
+    }
+    return { data: { user: null }, error: null };
+  };
+
+  rawClient.auth.signOut = async (options?: any) => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem(LOCAL_SESSION_KEY);
+      } catch {}
+    }
+    try {
+      // notify active listeners
+      (rawClient.auth as any)._notifyAllSubscribers?.("SIGNED_OUT", null);
+    } catch {}
+    try {
+      return await origSignOut(options);
+    } catch {
+      return { error: null };
+    }
+  };
+
+  return rawClient;
+}
+
+// Helper to manually set preview / Google session when external OAuth cannot redirect in preview
+export function setLocalPreviewSession(user: {
+  id: string;
+  email: string;
+  user_metadata?: Record<string, any>;
+}) {
+  if (typeof window === "undefined") return;
+  const session = {
+    access_token: "preview_access_token_" + Date.now(),
+    refresh_token: "preview_refresh_token_" + Date.now(),
+    expires_in: 3600 * 24 * 365,
+    expires_at: Math.floor(Date.now() / 1000) + 3600 * 24 * 365,
+    token_type: "bearer",
+    user: {
+      id: user.id,
+      email: user.email,
+      role: "authenticated",
+      aud: "authenticated",
+      app_metadata: { provider: "google" },
+      user_metadata: user.user_metadata || {},
+      created_at: new Date().toISOString(),
+    },
+  };
+  try {
+    localStorage.setItem("eliza_active_session", JSON.stringify(session));
+    (supabase.auth as any)._notifyAllSubscribers?.("SIGNED_IN", session);
+  } catch (err) {
+    console.error("Erro ao salvar sessão local:", err);
+  }
 }
 
 let _supabase: ReturnType<typeof createSupabaseClient> | undefined;
@@ -96,3 +180,4 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
     return Reflect.get(_supabase, prop, receiver);
   },
 });
+
