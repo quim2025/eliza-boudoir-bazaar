@@ -3,6 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CATEGORIES, brl, categoryLabel, productImage, getMockProducts } from "@/lib/catalog";
 
+import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+
 type Search = { categoria?: string };
 
 export const Route = createFileRoute("/loja")({
@@ -25,6 +28,16 @@ export const Route = createFileRoute("/loja")({
 
 function Loja() {
   const { categoria } = Route.useSearch();
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      qc.invalidateQueries({ queryKey: ["products"] });
+    };
+    window.addEventListener("eliza_catalog_updated", handleUpdate);
+    return () => window.removeEventListener("eliza_catalog_updated", handleUpdate);
+  }, [qc]);
+
   const { data, isLoading } = useQuery({
     queryKey: ["products", categoria ?? "all"],
     queryFn: async () => {
@@ -48,12 +61,18 @@ function Loja() {
   });
 
   return (
-    <div className="mx-auto max-w-7xl px-6 py-12">
-      <h1 className="text-5xl">{categoria ? categoryLabel(categoria) : "Toda a loja"}</h1>
-      <div className="mt-6 flex flex-wrap gap-2">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 py-8 sm:py-12">
+      <h1 className="text-3xl sm:text-5xl font-display">
+        {categoria ? categoryLabel(categoria) : "Toda a loja"}
+      </h1>
+      <div className="mt-4 sm:mt-6 flex flex-wrap gap-2 overflow-x-auto pb-1">
         <Link
           to="/loja"
-          className={`eyebrow border px-4 py-2 ${!categoria ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`}
+          className={`eyebrow border px-3 sm:px-4 py-2 text-xs transition-colors ${
+            !categoria
+              ? "bg-primary text-primary-foreground font-medium"
+              : "hover:bg-secondary bg-background"
+          }`}
         >
           Tudo
         </Link>
@@ -62,7 +81,11 @@ function Loja() {
             key={c.slug}
             to="/loja"
             search={{ categoria: c.slug }}
-            className={`eyebrow border px-4 py-2 ${categoria === c.slug ? "bg-primary text-primary-foreground" : "hover:bg-secondary"}`}
+            className={`eyebrow border px-3 sm:px-4 py-2 text-xs whitespace-nowrap transition-colors ${
+              categoria === c.slug
+                ? "bg-primary text-primary-foreground font-medium"
+                : "hover:bg-secondary bg-background"
+            }`}
           >
             {c.label}
           </Link>

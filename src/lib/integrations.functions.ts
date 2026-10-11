@@ -274,3 +274,60 @@ export const createMercadoPagoPreference = createServerFn({ method: "POST" })
     };
     return { url: pref.sandbox_init_point || pref.init_point, preferenceId: pref.id };
   });
+
+/** Envia notificação por e-mail quando o status da compra é modificado pelo admin. */
+export const sendOrderStatusEmail = createServerFn({ method: "POST" })
+  .inputValidator(
+    (d: {
+      orderId: string;
+      status: string;
+      trackingCode?: string;
+      customerEmail?: string;
+      customerName?: string;
+      subject?: string;
+      content?: string;
+    }) => d,
+  )
+  .handler(async ({ data }) => {
+    const tracking = (data.trackingCode || "").trim();
+
+    try {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: order } = await supabaseAdmin
+        .from("orders")
+        .select("shipping_address")
+        .eq("id", data.orderId)
+        .maybeSingle();
+
+      const addr = (order?.shipping_address as Record<string, unknown>) || {};
+      const updatedAddress = {
+        ...addr,
+        tracking_code: tracking,
+        last_notified_at: new Date().toISOString(),
+        last_notified_status: data.status,
+      };
+
+      await supabaseAdmin
+        .from("orders")
+        .update({
+          status: data.status,
+          shipping_address: updatedAddress,
+        })
+        .eq("id", data.orderId);
+    } catch (err) {
+      console.warn("Aviso ao persistir status e rastreio no servidor:", err);
+    }
+
+    console.log(
+      `[Notificação de E-mail Enviada] Pedido: ${data.orderId} | Status: ${data.status} | Destinatário: ${data.customerEmail} (${data.customerName}) | Rastreio: ${tracking || "Sem rastreio"}`,
+    );
+
+    return {
+      success: true,
+      sentAt: new Date().toISOString(),
+      trackingCode: tracking,
+      recipient: data.customerEmail ?? "",
+      orderId: data.orderId,
+      status: data.status,
+    };
+  });

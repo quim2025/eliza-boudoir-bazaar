@@ -31,37 +31,47 @@ function Carrinho() {
     );
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-12 px-6 py-12 lg:grid-cols-[1fr_360px]">
+    <div className="mx-auto grid max-w-6xl gap-8 lg:gap-12 px-4 sm:px-6 py-8 sm:py-12 lg:grid-cols-[1fr_360px]">
       <div>
-        <h1 className="text-5xl">Carrinho</h1>
-        <ul className="mt-8 divide-y border-y">
+        <h1 className="text-3xl sm:text-5xl font-display">Carrinho</h1>
+        <ul className="mt-6 sm:mt-8 divide-y border-y">
           {items.map((i) => (
-            <li key={i.variantId} className="flex gap-4 py-5">
+            <li key={i.variantId} className="flex gap-3 sm:gap-4 py-4 sm:py-5">
               <img
                 src={productImage(i.imageKey)}
                 alt={i.name}
                 loading="lazy"
                 width={800}
                 height={1008}
-                className="h-28 w-22 bg-muted object-cover"
+                className="h-24 sm:h-28 w-20 sm:w-24 bg-muted object-cover rounded-sm border shrink-0"
               />
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <Link
                   to="/produto/$id"
                   params={{ id: i.productId }}
-                  className="font-display text-xl hover:text-primary"
+                  className="font-display text-lg sm:text-xl hover:text-primary leading-tight truncate block"
                 >
                   {i.name}
                 </Link>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
                   Tamanho {i.size} · {i.color}
                 </p>
-                <div className="mt-3 flex items-center border w-fit">
-                  <button className="px-3 py-1" onClick={() => setQty(i.variantId, i.quantity - 1)}>
+                <div className="mt-3 flex items-center border w-fit bg-background">
+                  <button
+                    className="h-8 w-8 flex items-center justify-center hover:bg-muted font-medium text-base"
+                    onClick={() => setQty(i.variantId, i.quantity - 1)}
+                    aria-label="Diminuir quantidade"
+                  >
                     −
                   </button>
-                  <span className="w-8 text-center text-sm">{i.quantity}</span>
-                  <button className="px-3 py-1" onClick={() => setQty(i.variantId, i.quantity + 1)}>
+                  <span className="w-8 text-center text-xs sm:text-sm font-medium">
+                    {i.quantity}
+                  </span>
+                  <button
+                    className="h-8 w-8 flex items-center justify-center hover:bg-muted font-medium text-base"
+                    onClick={() => setQty(i.variantId, i.quantity + 1)}
+                    aria-label="Aumentar quantidade"
+                  >
                     +
                   </button>
                 </div>

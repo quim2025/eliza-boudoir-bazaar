@@ -177,11 +177,95 @@ export const DEFAULT_MOCK_PRODUCTS: MockProduct[] = [
   },
 ];
 
+const STORAGE_KEY = "eliza_custom_products";
+
+export const getCustomProducts = (): MockProduct[] => {
+  if (typeof window === "undefined") return DEFAULT_MOCK_PRODUCTS;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (err) {
+    console.warn("Falha ao recuperar produtos do localStorage:", err);
+  }
+  return DEFAULT_MOCK_PRODUCTS;
+};
+
+export const saveCustomProduct = (
+  prod: Partial<MockProduct> & {
+    name: string;
+    category: string;
+    price: number;
+    product_variants: MockProductVariant[];
+  },
+): MockProduct => {
+  const current = getCustomProducts();
+  const id = prod.id || `prod_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = new Date().toISOString();
+
+  const prepared: MockProduct = {
+    id,
+    name: prod.name,
+    description: prod.description || "",
+    category: prod.category,
+    price: Number(prod.price),
+    image_key: prod.image_key || "lingerie",
+    active: prod.active ?? true,
+    created_at: prod.created_at || now,
+    product_variants: prod.product_variants.map((v, idx) => ({
+      id: v.id || `var_${id}_${idx}_${Date.now()}`,
+      product_id: id,
+      size: v.size || "M",
+      color: v.color || "Preto",
+      color_hex: v.color_hex || "#1E1A1A",
+      stock: Math.max(0, Number(v.stock) || 0),
+    })),
+  };
+
+  const existingIdx = current.findIndex((p) => p.id === id);
+  let updated: MockProduct[];
+  if (existingIdx >= 0) {
+    updated = [...current];
+    updated[existingIdx] = prepared;
+  } else {
+    updated = [prepared, ...current];
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      window.dispatchEvent(new Event("eliza_catalog_updated"));
+    } catch (err) {
+      console.warn("Falha ao salvar produto no localStorage:", err);
+    }
+  }
+
+  return prepared;
+};
+
+export const deleteCustomProduct = (id: string): boolean => {
+  const current = getCustomProducts();
+  const filtered = current.filter((p) => p.id !== id);
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      window.dispatchEvent(new Event("eliza_catalog_updated"));
+    } catch (err) {
+      console.warn("Falha ao remover produto do localStorage:", err);
+    }
+  }
+  return true;
+};
+
 export const getMockProducts = (category?: string): MockProduct[] => {
-  if (!category) return DEFAULT_MOCK_PRODUCTS;
-  return DEFAULT_MOCK_PRODUCTS.filter((p) => p.category === category);
+  const list = getCustomProducts();
+  if (!category) return list;
+  return list.filter((p) => p.category === category);
 };
 
 export const getMockProduct = (id: string): MockProduct | undefined => {
-  return DEFAULT_MOCK_PRODUCTS.find((p) => p.id === id);
+  const list = getCustomProducts();
+  return list.find((p) => p.id === id);
 };

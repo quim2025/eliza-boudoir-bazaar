@@ -74,14 +74,16 @@ function Produto() {
   };
 
   return (
-    <div className="mx-auto grid max-w-7xl gap-12 px-6 py-12 md:grid-cols-2">
-      <img
-        src={productImage(p.image_key)}
-        alt={p.name}
-        width={800}
-        height={1008}
-        className="aspect-[4/5] w-full bg-muted object-cover"
-      />
+    <div className="mx-auto grid max-w-7xl gap-8 md:gap-12 px-4 sm:px-6 py-6 sm:py-12 md:grid-cols-2">
+      <div className="overflow-hidden bg-muted rounded-sm border">
+        <img
+          src={productImage(p.image_key)}
+          alt={p.name}
+          width={800}
+          height={1008}
+          className="aspect-[4/5] w-full object-cover"
+        />
+      </div>
       <div>
         <Link
           to="/loja"
@@ -90,25 +92,30 @@ function Produto() {
         >
           {categoryLabel(p.category)}
         </Link>
-        <h1 className="mt-2 text-5xl">{p.name}</h1>
-        <p className="mt-4 text-2xl">{brl(Number(p.price))}</p>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="mt-2 text-3xl sm:text-5xl font-display leading-tight">{p.name}</h1>
+        <p className="mt-3 text-xl sm:text-2xl font-semibold text-primary">
+          {brl(Number(p.price))}
+        </p>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
           ou 6x de {brl(Number(p.price) / 6)} sem juros
         </p>
-        <p className="mt-6 leading-relaxed text-muted-foreground">{p.description}</p>
+        <p className="mt-5 leading-relaxed text-sm sm:text-base text-muted-foreground">
+          {p.description}
+        </p>
 
-        <div className="mt-8">
-          <p className="eyebrow mb-3">
+        <div className="mt-7">
+          <p className="eyebrow mb-2.5">
             Cor {color && <span className="text-muted-foreground">— {color}</span>}
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2.5">
             {colors.map(([name, hex]) => (
               <button
                 key={name}
                 title={name}
                 onClick={() => setColor(name)}
-                className={`h-9 w-9 rounded-full border-2 ring-offset-2 ring-offset-background transition ${color === name ? "ring-2 ring-primary" : ""}`}
+                className={`h-10 w-10 rounded-full border-2 ring-offset-2 ring-offset-background transition cursor-pointer hover:scale-105 ${color === name ? "ring-2 ring-primary border-primary" : ""}`}
                 style={{ backgroundColor: hex }}
+                aria-label={`Cor ${name}`}
               />
             ))}
           </div>
