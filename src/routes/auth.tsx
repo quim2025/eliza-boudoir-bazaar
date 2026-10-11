@@ -47,64 +47,19 @@ function Entrar() {
   const google = async () => {
     setOauthLoading(true);
     try {
-      // 1. Try Supabase direct OAuth first to get real redirect URL
-      const { data, error: supaErr } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin,
-        },
+      const r = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
       });
-
-      if (!supaErr && data?.url && !data.url.includes("placeholder-project")) {
-        window.location.href = data.url;
+      if (r?.error) {
+        toast.error("Não foi possível entrar com o Google. Tente novamente.");
         return;
       }
-
-      // 2. Try Lovable OAuth
-      try {
-        const r = await lovable.auth.signInWithOAuth("google", {
-          redirect_uri: window.location.origin,
-        });
-        if (r && !r.error) {
-          toast.success("Autenticado com sucesso!");
-          navigate({ to: "/loja" });
-          return;
-        }
-      } catch (lErr) {
-        console.warn("[Auth] Lovable OAuth caught:", lErr);
-      }
-
-      // 3. In AI Studio / preview environment where external Google OAuth isn't provisioned or popup is blocked,
-      // seamlessly authenticate as the user/administrator account
-      const adminEmail = email.trim() || "rafael22esteves@gmail.com";
-      const name = adminEmail.split("@")[0].replace(/\./g, " ");
-
-      setLocalPreviewSession({
-        id: "usr_admin_" + adminEmail.replace(/[^a-zA-Z0-9]/g, "_"),
-        email: adminEmail,
-        user_metadata: {
-          full_name: name.charAt(0).toUpperCase() + name.slice(1),
-          name: name,
-        },
-      });
-
-      toast.success(`Conectado como ${adminEmail}!`);
-      // Redirect to admin panel if administrator, else /loja
-      if (adminEmail.toLowerCase() === "rafael22esteves@gmail.com") {
-        navigate({ to: "/admin" });
-      } else {
-        navigate({ to: "/loja" });
-      }
+      if (r?.redirected) return; // navegador está indo para o Google
+      toast.success("Autenticado com sucesso!");
+      navigate({ to: "/loja" });
     } catch (err) {
-      console.error("[Auth] Unexpected OAuth error:", err);
-      // Fallback preview session
-      setLocalPreviewSession({
-        id: "usr_admin_rafael",
-        email: "rafael22esteves@gmail.com",
-        user_metadata: { full_name: "Rafael Esteves" },
-      });
-      toast.success("Autenticado como Administrador!");
-      navigate({ to: "/admin" });
+      console.error("[Auth] Google OAuth error:", err);
+      toast.error("Não foi possível entrar com o Google. Tente novamente.");
     } finally {
       setOauthLoading(false);
     }
