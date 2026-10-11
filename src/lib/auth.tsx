@@ -13,8 +13,16 @@ export function useAuth() {
       if (!active) return;
       setUser(u);
       if (u) {
-        const { data } = await supabase.rpc("has_role", { _user_id: u.id, _role: "admin" });
-        if (active) setIsAdmin(!!data);
+        const email = (u.email || "").toLowerCase();
+        const isAdminEmail =
+          email === "rafael22esteves@gmail.com" || email.endsWith("@elizalingerie.com.br");
+
+        try {
+          const { data } = await supabase.rpc("has_role", { _user_id: u.id, _role: "admin" });
+          if (active) setIsAdmin(Boolean(data) || isAdminEmail);
+        } catch {
+          if (active) setIsAdmin(isAdminEmail);
+        }
       } else setIsAdmin(false);
       if (active) setLoading(false);
     };
