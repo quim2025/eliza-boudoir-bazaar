@@ -20,7 +20,8 @@ export function useAuth() {
     };
     supabase.auth.getUser().then(({ data }) => load(data.user));
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") load(session?.user ?? null);
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED")
+        load(session?.user ?? null);
     });
     return () => {
       active = false;

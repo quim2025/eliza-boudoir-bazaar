@@ -1,0 +1,5 @@
+{
+  "name": "Eliza Lingerie",
+  "description": "Lingerie, roupas íntimas e pijamas femininos e infantis.",
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -9,13 +9,25 @@ export const Route = createFileRoute("/api/public/mercadopago-webhook")({
         const token = process.env["MERCADOPAGO_ACCESS_TOKEN"];
         if (!token) return new Response("not configured", { status: 200 });
         const url = new URL(request.url);
-        let body: any = {};
-        try { body = await request.json(); } catch {}
+        type WebhookBody = {
+          type?: string;
+          data?: { id?: string | number };
+        };
+        let body: WebhookBody = {};
+        try {
+          body = (await request.json()) as WebhookBody;
+        } catch (err) {
+          console.warn("Falha ao analisar JSON do webhook", err);
+        }
         const type = body.type ?? url.searchParams.get("type") ?? url.searchParams.get("topic");
-        const paymentId = body.data?.id ?? url.searchParams.get("data.id") ?? url.searchParams.get("id");
-        if (type !== "payment" || !paymentId || !/^\d+$/.test(String(paymentId))) return new Response("ignored", { status: 200 });
+        const paymentId =
+          body.data?.id ?? url.searchParams.get("data.id") ?? url.searchParams.get("id");
+        if (type !== "payment" || !paymentId || !/^\d+$/.test(String(paymentId)))
+          return new Response("ignored", { status: 200 });
 
-        const r = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, { headers: { Authorization: `Bearer ${token}` } });
+        const r = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!r.ok) return new Response("lookup failed", { status: 200 });
         const p = (await r.json()) as { status: string; external_reference?: string; id: number };
         if (!p.external_reference) return new Response("ok", { status: 200 });
@@ -27,7 +39,8 @@ export const Route = createFileRoute("/api/public/mercadopago-webhook")({
         };
         const next = map[p.status] ?? { status: "pendente", payment_status: `mp_${p.status}` };
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        await supabaseAdmin.from("orders")
+        await supabaseAdmin
+          .from("orders")
           .update({ ...next, payment_reference: `MP-${p.id}` })
           .eq("id", p.external_reference)
           .eq("payment_method", "mercadopago");

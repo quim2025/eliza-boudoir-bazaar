@@ -32,7 +32,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) setItems(JSON.parse(raw));
-    } catch {}
+    } catch (err) {
+      console.warn("Falha ao carregar carrinho do localStorage", err);
+    }
     setLoaded(true);
   }, []);
   useEffect(() => {
@@ -44,10 +46,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
     add: (item) =>
       setItems((prev) => {
         const ex = prev.find((i) => i.variantId === item.variantId);
-        if (ex) return prev.map((i) => (i.variantId === item.variantId ? { ...i, quantity: i.quantity + item.quantity } : i));
+        if (ex)
+          return prev.map((i) =>
+            i.variantId === item.variantId ? { ...i, quantity: i.quantity + item.quantity } : i,
+          );
         return [...prev, item];
       }),
-    setQty: (id, q) => setItems((prev) => prev.map((i) => (i.variantId === id ? { ...i, quantity: Math.max(1, q) } : i))),
+    setQty: (id, q) =>
+      setItems((prev) =>
+        prev.map((i) => (i.variantId === id ? { ...i, quantity: Math.max(1, q) } : i)),
+      ),
     remove: (id) => setItems((prev) => prev.filter((i) => i.variantId !== id)),
     clear: () => setItems([]),
     count: items.reduce((s, i) => s + i.quantity, 0),

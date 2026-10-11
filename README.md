@@ -1,14 +1,14 @@
 # Eliza Boudoir Bazaar
 
-Crie um site de uma loja chamada Eliza Lingerie. 
+Crie um site de uma loja chamada Eliza Lingerie.
 
-Nesse site tenha a area da loja, onde o cliente poderá escolher tamanho e cor do produto. As categorias de produtos são lingerie, roupas intimas femininas e pijamas femininos, alem de pijamas e roupas intimas femininas infantis. 
+Nesse site tenha a area da loja, onde o cliente poderá escolher tamanho e cor do produto. As categorias de produtos são lingerie, roupas intimas femininas e pijamas femininos, alem de pijamas e roupas intimas femininas infantis.
 
 Esse site deverá ter uma area de login do cliente em português, area para criação de conta em portugês tambem onde o cliente coloque seus dados pessoais, endereço e local de entrega.
 
-Crie um abiente de pagamento de testes que posssa ser altamente personalizavel posteriormente. 
+Crie um abiente de pagamento de testes que posssa ser altamente personalizavel posteriormente.
 
-Um carinho de compra. 
+Um carinho de compra.
 
 E crie uma area do admin onde os proprietarios possam monitorar , estoques , pedidos, contato dos clientes.
 

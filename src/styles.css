@@ -78,14 +78,23 @@
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
     font-weight: 300;
   }
-  h1, h2, h3, .font-display { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.01em; }
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
 }
 
 @utility eyebrow {

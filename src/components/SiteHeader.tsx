@@ -20,20 +20,35 @@ export function SiteHeader() {
           Eliza <span className="italic text-primary">Lingerie</span>
         </Link>
         <nav className="hidden gap-6 lg:flex">
-          <Link to="/loja" className="eyebrow hover:text-primary" activeOptions={{ includeSearch: false }}>Loja</Link>
+          <Link
+            to="/loja"
+            className="eyebrow hover:text-primary"
+            activeOptions={{ includeSearch: false }}
+          >
+            Loja
+          </Link>
           {CATEGORIES.map((c) => (
-            <Link key={c.slug} to="/loja" search={{ categoria: c.slug }} className="eyebrow hover:text-primary">
+            <Link
+              key={c.slug}
+              to="/loja"
+              search={{ categoria: c.slug }}
+              className="eyebrow hover:text-primary"
+            >
               {c.label}
             </Link>
           ))}
         </nav>
         <div className="flex items-center gap-4">
           {isAdmin && (
-            <Link to="/admin" title="Painel admin" className="hover:text-primary"><LayoutDashboard className="h-5 w-5" /></Link>
+            <Link to="/admin" title="Painel admin" className="hover:text-primary">
+              <LayoutDashboard className="h-5 w-5" />
+            </Link>
           )}
           {user ? (
             <>
-              <Link to="/conta" title="Minha conta" className="hover:text-primary"><User className="h-5 w-5" /></Link>
+              <Link to="/conta" title="Minha conta" className="hover:text-primary">
+                <User className="h-5 w-5" />
+              </Link>
               <button
                 title="Sair"
                 className="hover:text-primary"
@@ -46,7 +61,9 @@ export function SiteHeader() {
               </button>
             </>
           ) : (
-            <Link to="/auth" className="eyebrow hover:text-primary">Entrar</Link>
+            <Link to="/auth" className="eyebrow hover:text-primary">
+              Entrar
+            </Link>
           )}
           <Link to="/carrinho" className="relative hover:text-primary" title="Carrinho">
             <ShoppingBag className="h-5 w-5" />
@@ -67,13 +84,24 @@ export function SiteFooter() {
     <footer className="mt-24 border-t bg-secondary/50">
       <div className="mx-auto grid max-w-7xl gap-8 px-6 py-12 md:grid-cols-3">
         <div>
-          <p className="font-display text-2xl">Eliza <span className="italic text-primary">Lingerie</span></p>
-          <p className="mt-2 text-sm text-muted-foreground">Delicadeza e conforto para mulheres e meninas.</p>
+          <p className="font-display text-2xl">
+            Eliza <span className="italic text-primary">Lingerie</span>
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Delicadeza e conforto para mulheres e meninas.
+          </p>
         </div>
         <div className="text-sm text-muted-foreground">
           <p className="eyebrow mb-3 text-foreground">Categorias</p>
           {CATEGORIES.map((c) => (
-            <Link key={c.slug} to="/loja" search={{ categoria: c.slug }} className="block py-0.5 hover:text-primary">{c.label}</Link>
+            <Link
+              key={c.slug}
+              to="/loja"
+              search={{ categoria: c.slug }}
+              className="block py-0.5 hover:text-primary"
+            >
+              {c.label}
+            </Link>
           ))}
         </div>
         <div className="text-sm text-muted-foreground">

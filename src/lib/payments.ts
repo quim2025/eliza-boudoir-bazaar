@@ -6,7 +6,13 @@
  */
 export type PaymentMethod = "cartao" | "pix" | "boleto";
 
-export type CardData = { number: string; name: string; expiry: string; cvv: string; installments: number };
+export type CardData = {
+  number: string;
+  name: string;
+  expiry: string;
+  cvv: string;
+  installments: number;
+};
 
 export type PaymentRequest = { amount: number; method: PaymentMethod; card?: CardData };
 

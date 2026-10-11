@@ -20,17 +20,19 @@ export type ShippingOption = {
 
 /** Cotação de frete — Melhor Envio (sandbox otimizado para peças de lingerie). */
 export const quoteShipping = createServerFn({ method: "POST" })
-  .inputValidator((d: { toCep: string; items: { id: string; quantity: number; price: number }[] }) => {
-    const cep = String(d.toCep ?? "").replace(/\D/g, "");
-    if (cep.length !== 8) throw new Error("CEP inválido");
-    return { toCep: cep, items: (d.items ?? []).slice(0, 50) };
-  })
+  .inputValidator(
+    (d: { toCep: string; items: { id: string; quantity: number; price: number }[] }) => {
+      const cep = String(d.toCep ?? "").replace(/\D/g, "");
+      if (cep.length !== 8) throw new Error("CEP inválido");
+      return { toCep: cep, items: (d.items ?? []).slice(0, 50) };
+    },
+  )
   .handler(async ({ data }): Promise<{ options: ShippingOption[]; live: boolean }> => {
     const token = process.env["MELHOR_ENVIO_TOKEN"] || DEFAULT_SANDBOX_TOKEN;
 
     // Dimensões realistas de pacote de lingerie para habilitar Mini Envios, PAC, SEDEX e Jadlog
     const totalQty = data.items.reduce((acc, i) => acc + (i.quantity || 1), 0);
-    const totalInsurance = data.items.reduce((acc, i) => acc + (i.price * (i.quantity || 1)), 0);
+    const totalInsurance = data.items.reduce((acc, i) => acc + i.price * (i.quantity || 1), 0);
 
     // Mini Envios aceita até 0.3kg, altura max 4cm, largura max 16cm, comprimento max 24cm
     const isSmallPackage = totalQty <= 2;
@@ -76,12 +78,22 @@ export const quoteShipping = createServerFn({ method: "POST" })
         };
       }
 
-      const list = (await res.json()) as any[];
+      interface MelhorEnvioApiItem {
+        id?: string | number;
+        name?: string;
+        error?: string;
+        custom_price?: number | string;
+        price?: number | string;
+        custom_delivery_time?: number | string;
+        delivery_time?: number | string;
+        company?: { name?: string; picture?: string };
+      }
+      const list = (await res.json()) as MelhorEnvioApiItem[];
       const validOptions: ShippingOption[] = list
         .filter((o) => !o.error && (o.custom_price || o.price))
         .map((o) => ({
-          id: String(o.id),
-          name: o.name,
+          id: String(o.id ?? ""),
+          name: o.name ?? "Entrega",
           company: o.company?.name ?? "Transportadora",
           price: Number(o.custom_price ?? o.price),
           days: Number(o.custom_delivery_time ?? o.delivery_time),
@@ -115,7 +127,9 @@ const getStripeKey = (): string => {
       "c2tfdGVzdF81MVVQMDFMUE0ySjN5bE94TnFWSk1SWTNSdkh1TDBQbVB6czBiNkVxZ29BQjBtQ2Ric21MZXVjdnBOaWxadnBpaHFXWWIxczdodFJHaEN0SGRycEFxZmNyQzAwSmRuTno0d0o=";
     if (typeof Buffer !== "undefined") return Buffer.from(b64, "base64").toString("utf-8");
     if (typeof atob !== "undefined") return atob(b64);
-  } catch {}
+  } catch (err) {
+    console.warn("Erro ao decodificar chave Stripe", err);
+  }
   return "";
 };
 
@@ -163,7 +177,7 @@ export const createStripeCheckoutSession = createServerFn({ method: "POST" })
       params.append(`line_items[${itemIdx}][price_data][unit_amount]`, String(unitAmount));
       params.append(
         `line_items[${itemIdx}][price_data][product_data][name]`,
-        `${item.product_name} (${item.size}, ${item.color})`
+        `${item.product_name} (${item.size}, ${item.color})`,
       );
       params.append(`line_items[${itemIdx}][quantity]`, String(item.quantity));
       itemIdx++;
@@ -175,7 +189,7 @@ export const createStripeCheckoutSession = createServerFn({ method: "POST" })
       params.append(`line_items[${itemIdx}][price_data][unit_amount]`, String(shippingAmount));
       params.append(
         `line_items[${itemIdx}][price_data][product_data][name]`,
-        `Frete (${order.shipping_service || "Entrega"})`
+        `Frete (${order.shipping_service || "Entrega"})`,
       );
       params.append(`line_items[${itemIdx}][quantity]`, "1");
     }
@@ -207,7 +221,11 @@ export const createMercadoPagoPreference = createServerFn({ method: "POST" })
     const token = process.env["MERCADOPAGO_ACCESS_TOKEN"];
     if (!token) throw new Error("Mercado Pago ainda não configurado");
     const { data: order, error } = await context.supabase
-      .from("orders").select("*, order_items(*)").eq("id", data.orderId).eq("user_id", context.userId).maybeSingle();
+      .from("orders")
+      .select("*, order_items(*)")
+      .eq("id", data.orderId)
+      .eq("user_id", context.userId)
+      .maybeSingle();
     if (error || !order) throw new Error("Pedido não encontrado");
     const origin = new URL(data.origin).origin;
 
@@ -218,7 +236,14 @@ export const createMercadoPagoPreference = createServerFn({ method: "POST" })
       unit_price: Number(i.unit_price),
       currency_id: "BRL",
     }));
-    if (Number(order.shipping) > 0) items.push({ id: "frete", title: "Frete", quantity: 1, unit_price: Number(order.shipping), currency_id: "BRL" });
+    if (Number(order.shipping) > 0)
+      items.push({
+        id: "frete",
+        title: "Frete",
+        quantity: 1,
+        unit_price: Number(order.shipping),
+        currency_id: "BRL",
+      });
 
     const res = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
@@ -226,9 +251,15 @@ export const createMercadoPagoPreference = createServerFn({ method: "POST" })
       body: JSON.stringify({
         items,
         external_reference: order.id,
-        back_urls: { success: `${origin}/conta`, pending: `${origin}/conta`, failure: `${origin}/conta` },
+        back_urls: {
+          success: `${origin}/conta`,
+          pending: `${origin}/conta`,
+          failure: `${origin}/conta`,
+        },
         auto_return: origin.startsWith("https") ? "approved" : undefined,
-        notification_url: origin.startsWith("https") ? `${origin}/api/public/mercadopago-webhook` : undefined,
+        notification_url: origin.startsWith("https")
+          ? `${origin}/api/public/mercadopago-webhook`
+          : undefined,
         statement_descriptor: "ELIZA LINGERIE",
       }),
     });
@@ -236,6 +267,10 @@ export const createMercadoPagoPreference = createServerFn({ method: "POST" })
       console.error("Mercado Pago", res.status, await res.text());
       throw new Error("Não foi possível iniciar o pagamento");
     }
-    const pref = (await res.json()) as { id: string; init_point: string; sandbox_init_point: string };
+    const pref = (await res.json()) as {
+      id: string;
+      init_point: string;
+      sandbox_init_point: string;
+    };
     return { url: pref.sandbox_init_point || pref.init_point, preferenceId: pref.id };
   });

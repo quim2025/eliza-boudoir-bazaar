@@ -1,412 +1,400 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.18"
-  }
+    PostgrestVersion: "14.18";
+  };
   public: {
     Tables: {
       order_items: {
         Row: {
-          color: string
-          id: string
-          order_id: string
-          product_name: string
-          quantity: number
-          size: string
-          unit_price: number
-          variant_id: string | null
-        }
+          color: string;
+          id: string;
+          order_id: string;
+          product_name: string;
+          quantity: number;
+          size: string;
+          unit_price: number;
+          variant_id: string | null;
+        };
         Insert: {
-          color: string
-          id?: string
-          order_id: string
-          product_name: string
-          quantity: number
-          size: string
-          unit_price: number
-          variant_id?: string | null
-        }
+          color: string;
+          id?: string;
+          order_id: string;
+          product_name: string;
+          quantity: number;
+          size: string;
+          unit_price: number;
+          variant_id?: string | null;
+        };
         Update: {
-          color?: string
-          id?: string
-          order_id?: string
-          product_name?: string
-          quantity?: number
-          size?: string
-          unit_price?: number
-          variant_id?: string | null
-        }
+          color?: string;
+          id?: string;
+          order_id?: string;
+          product_name?: string;
+          quantity?: number;
+          size?: string;
+          unit_price?: number;
+          variant_id?: string | null;
+        };
         Relationships: [
           {
-            foreignKeyName: "order_items_order_id_fkey"
-            columns: ["order_id"]
-            isOneToOne: false
-            referencedRelation: "orders"
-            referencedColumns: ["id"]
+            foreignKeyName: "order_items_order_id_fkey";
+            columns: ["order_id"];
+            isOneToOne: false;
+            referencedRelation: "orders";
+            referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "order_items_variant_id_fkey"
-            columns: ["variant_id"]
-            isOneToOne: false
-            referencedRelation: "product_variants"
-            referencedColumns: ["id"]
+            foreignKeyName: "order_items_variant_id_fkey";
+            columns: ["variant_id"];
+            isOneToOne: false;
+            referencedRelation: "product_variants";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       orders: {
         Row: {
-          created_at: string
-          id: string
-          payment_method: string
-          payment_reference: string | null
-          payment_status: string
-          shipping: number
-          shipping_address: Json
-          shipping_service: string | null
-          status: string
-          subtotal: number
-          total: number
-          user_id: string
-        }
+          created_at: string;
+          id: string;
+          payment_method: string;
+          payment_reference: string | null;
+          payment_status: string;
+          shipping: number;
+          shipping_address: Json;
+          shipping_service: string | null;
+          status: string;
+          subtotal: number;
+          total: number;
+          user_id: string;
+        };
         Insert: {
-          created_at?: string
-          id?: string
-          payment_method: string
-          payment_reference?: string | null
-          payment_status?: string
-          shipping?: number
-          shipping_address?: Json
-          shipping_service?: string | null
-          status?: string
-          subtotal: number
-          total: number
-          user_id: string
-        }
+          created_at?: string;
+          id?: string;
+          payment_method: string;
+          payment_reference?: string | null;
+          payment_status?: string;
+          shipping?: number;
+          shipping_address?: Json;
+          shipping_service?: string | null;
+          status?: string;
+          subtotal: number;
+          total: number;
+          user_id: string;
+        };
         Update: {
-          created_at?: string
-          id?: string
-          payment_method?: string
-          payment_reference?: string | null
-          payment_status?: string
-          shipping?: number
-          shipping_address?: Json
-          shipping_service?: string | null
-          status?: string
-          subtotal?: number
-          total?: number
-          user_id?: string
-        }
-        Relationships: []
-      }
+          created_at?: string;
+          id?: string;
+          payment_method?: string;
+          payment_reference?: string | null;
+          payment_status?: string;
+          shipping?: number;
+          shipping_address?: Json;
+          shipping_service?: string | null;
+          status?: string;
+          subtotal?: number;
+          total?: number;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       product_variants: {
         Row: {
-          color: string
-          color_hex: string
-          id: string
-          product_id: string
-          size: string
-          stock: number
-        }
+          color: string;
+          color_hex: string;
+          id: string;
+          product_id: string;
+          size: string;
+          stock: number;
+        };
         Insert: {
-          color: string
-          color_hex?: string
-          id?: string
-          product_id: string
-          size: string
-          stock?: number
-        }
+          color: string;
+          color_hex?: string;
+          id?: string;
+          product_id: string;
+          size: string;
+          stock?: number;
+        };
         Update: {
-          color?: string
-          color_hex?: string
-          id?: string
-          product_id?: string
-          size?: string
-          stock?: number
-        }
+          color?: string;
+          color_hex?: string;
+          id?: string;
+          product_id?: string;
+          size?: string;
+          stock?: number;
+        };
         Relationships: [
           {
-            foreignKeyName: "product_variants_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
+            foreignKeyName: "product_variants_product_id_fkey";
+            columns: ["product_id"];
+            isOneToOne: false;
+            referencedRelation: "products";
+            referencedColumns: ["id"];
           },
-        ]
-      }
+        ];
+      };
       products: {
         Row: {
-          active: boolean
-          category: string
-          created_at: string
-          description: string
-          id: string
-          image_key: string
-          name: string
-          price: number
-        }
+          active: boolean;
+          category: string;
+          created_at: string;
+          description: string;
+          id: string;
+          image_key: string;
+          name: string;
+          price: number;
+        };
         Insert: {
-          active?: boolean
-          category: string
-          created_at?: string
-          description?: string
-          id?: string
-          image_key?: string
-          name: string
-          price: number
-        }
+          active?: boolean;
+          category: string;
+          created_at?: string;
+          description?: string;
+          id?: string;
+          image_key?: string;
+          name: string;
+          price: number;
+        };
         Update: {
-          active?: boolean
-          category?: string
-          created_at?: string
-          description?: string
-          id?: string
-          image_key?: string
-          name?: string
-          price?: number
-        }
-        Relationships: []
-      }
+          active?: boolean;
+          category?: string;
+          created_at?: string;
+          description?: string;
+          id?: string;
+          image_key?: string;
+          name?: string;
+          price?: number;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
-          birth_date: string | null
-          cep: string | null
-          city: string | null
-          complement: string | null
-          cpf: string | null
-          created_at: string
-          delivery_notes: string | null
-          full_name: string
-          id: string
-          neighborhood: string | null
-          number: string | null
-          phone: string | null
-          state: string | null
-          street: string | null
-          updated_at: string
-        }
+          birth_date: string | null;
+          cep: string | null;
+          city: string | null;
+          complement: string | null;
+          cpf: string | null;
+          created_at: string;
+          delivery_notes: string | null;
+          full_name: string;
+          id: string;
+          neighborhood: string | null;
+          number: string | null;
+          phone: string | null;
+          state: string | null;
+          street: string | null;
+          updated_at: string;
+        };
         Insert: {
-          birth_date?: string | null
-          cep?: string | null
-          city?: string | null
-          complement?: string | null
-          cpf?: string | null
-          created_at?: string
-          delivery_notes?: string | null
-          full_name?: string
-          id: string
-          neighborhood?: string | null
-          number?: string | null
-          phone?: string | null
-          state?: string | null
-          street?: string | null
-          updated_at?: string
-        }
+          birth_date?: string | null;
+          cep?: string | null;
+          city?: string | null;
+          complement?: string | null;
+          cpf?: string | null;
+          created_at?: string;
+          delivery_notes?: string | null;
+          full_name?: string;
+          id: string;
+          neighborhood?: string | null;
+          number?: string | null;
+          phone?: string | null;
+          state?: string | null;
+          street?: string | null;
+          updated_at?: string;
+        };
         Update: {
-          birth_date?: string | null
-          cep?: string | null
-          city?: string | null
-          complement?: string | null
-          cpf?: string | null
-          created_at?: string
-          delivery_notes?: string | null
-          full_name?: string
-          id?: string
-          neighborhood?: string | null
-          number?: string | null
-          phone?: string | null
-          state?: string | null
-          street?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
+          birth_date?: string | null;
+          cep?: string | null;
+          city?: string | null;
+          complement?: string | null;
+          cpf?: string | null;
+          created_at?: string;
+          delivery_notes?: string | null;
+          full_name?: string;
+          id?: string;
+          neighborhood?: string | null;
+          number?: string | null;
+          phone?: string | null;
+          state?: string | null;
+          street?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       user_roles: {
         Row: {
-          id: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          id: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
         Insert: {
-          id?: string
-          role: Database["public"]["Enums"]["app_role"]
-          user_id: string
-        }
+          id?: string;
+          role: Database["public"]["Enums"]["app_role"];
+          user_id: string;
+        };
         Update: {
-          id?: string
-          role?: Database["public"]["Enums"]["app_role"]
-          user_id?: string
-        }
-        Relationships: []
-      }
-    }
+          id?: string;
+          role?: Database["public"]["Enums"]["app_role"];
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+    };
     Views: {
-      [_ in never]: never
-    }
+      [_ in never]: never;
+    };
     Functions: {
       has_role: {
         Args: {
-          _role: Database["public"]["Enums"]["app_role"]
-          _user_id: string
-        }
-        Returns: boolean
-      }
+          _role: Database["public"]["Enums"]["app_role"];
+          _user_id: string;
+        };
+        Returns: boolean;
+      };
       place_order: {
         Args: {
-          p_items: Json
-          p_payment_method: string
-          p_payment_reference: string
-          p_payment_status: string
-          p_shipping_address: Json
-        }
-        Returns: string
-      }
+          p_items: Json;
+          p_payment_method: string;
+          p_payment_reference: string;
+          p_payment_status: string;
+          p_shipping_address: Json;
+        };
+        Returns: string;
+      };
       place_order_v2: {
         Args: {
-          p_items: Json
-          p_payment_method: string
-          p_payment_reference: string
-          p_payment_status: string
-          p_shipping: number
-          p_shipping_address: Json
-          p_shipping_service: string
-        }
-        Returns: string
-      }
-    }
+          p_items: Json;
+          p_payment_method: string;
+          p_payment_reference: string;
+          p_payment_status: string;
+          p_shipping: number;
+          p_shipping_address: Json;
+          p_shipping_service: string;
+        };
+        Returns: string;
+      };
+    };
     Enums: {
-      app_role: "admin" | "user"
-    }
+      app_role: "admin" | "user";
+    };
     CompositeTypes: {
-      [_ in never]: never
-    }
-  }
-}
+      [_ in never]: never;
+    };
+  };
+};
 
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
+      Row: infer R;
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R;
       }
       ? R
       : never
-    : never
+    : never;
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
+      Insert: infer I;
     }
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
+        Insert: infer I;
       }
       ? I
       : never
-    : never
+    : never;
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
   TableName extends (DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
+      Update: infer U;
     }
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
     ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
+        Update: infer U;
       }
       ? U
       : never
-    : never
+    : never;
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
   EnumName extends (DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+    : never;
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
+    schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
+  schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+    : never;
 
 export const Constants = {
   public: {
@@ -414,4 +402,4 @@ export const Constants = {
       app_role: ["admin", "user"],
     },
   },
-} as const
+} as const;

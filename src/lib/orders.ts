@@ -1,4 +1,11 @@
-export const ORDER_STATUSES = ["pendente", "pago", "separando", "enviado", "entregue", "cancelado"] as const;
+export const ORDER_STATUSES = [
+  "pendente",
+  "pago",
+  "separando",
+  "enviado",
+  "entregue",
+  "cancelado",
+] as const;
 
 export const STATUS_LABEL: Record<string, string> = {
   pendente: "Aguardando pagamento",
@@ -18,4 +25,5 @@ export const PAYMENT_LABEL: Record<string, string> = {
   cancelado_mp: "Cancelado (Mercado Pago)",
 };
 
-export const dateBR = (d: string) => new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+export const dateBR = (d: string) =>
+  new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });

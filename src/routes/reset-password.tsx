@@ -31,8 +31,19 @@ function Reset() {
   return (
     <form onSubmit={submit} className="mx-auto max-w-md space-y-4 px-6 py-16">
       <h1 className="text-4xl">Defina sua nova senha</h1>
-      <div><Label>Nova senha</Label><Input type="password" minLength={6} required value={password} onChange={(e) => setPassword(e.target.value)} /></div>
-      <Button type="submit" className="w-full rounded-none eyebrow">Salvar</Button>
+      <div>
+        <Label>Nova senha</Label>
+        <Input
+          type="password"
+          minLength={6}
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </div>
+      <Button type="submit" className="w-full rounded-none eyebrow">
+        Salvar
+      </Button>
     </form>
   );
 }
