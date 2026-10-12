@@ -211,6 +211,8 @@ export interface AdminOrderSummary {
 function AdminPanel() {
   const qc = useQueryClient();
   const sendEmailFn = useServerFn(sendOrderStatusEmail);
+  const getSettingFn = useServerFn(getStoreSetting);
+  const updateSettingFn = useServerFn(updateStoreSetting);
 
   // Queries
   const { data: orders = [] } = useQuery({
@@ -283,6 +285,39 @@ function AdminPanel() {
   // Search & Filters for Products
   const [productSearch, setProductSearch] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
+
+  // Store Settings (e-mail padrão de notificação)
+  const [notificationEmail, setNotificationEmail] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+  const { data: savedNotificationEmail } = useQuery({
+    queryKey: ["store-setting", "notification_email"],
+    queryFn: async () => {
+      const res = await getSettingFn({ data: { key: "notification_email" } });
+      return res.value || "";
+    },
+  });
+  useEffect(() => {
+    if (savedNotificationEmail !== undefined) setNotificationEmail(savedNotificationEmail);
+  }, [savedNotificationEmail]);
+
+  const saveNotificationEmail = async () => {
+    if (!/^\S+@\S+\.\S+$/.test(notificationEmail.trim())) {
+      toast.error("Informe um e-mail válido.");
+      return;
+    }
+    setSavingSettings(true);
+    try {
+      await updateSettingFn({
+        data: { key: "notification_email", value: notificationEmail.trim() },
+      });
+      qc.invalidateQueries({ queryKey: ["store-setting", "notification_email"] });
+      toast.success("E-mail de notificação atualizado!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // Computed metrics
   const revenue = (orders ?? [])
