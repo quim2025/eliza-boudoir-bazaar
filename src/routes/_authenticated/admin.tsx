@@ -286,8 +286,9 @@ function AdminPanel() {
   const [productSearch, setProductSearch] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
 
-  // Store Settings (e-mail padrão de notificação)
+  // Store Settings (e-mail remetente + modelo da mensagem de notificação)
   const [notificationEmail, setNotificationEmail] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const { data: savedNotificationEmail } = useQuery({
     queryKey: ["store-setting", "notification_email"],
@@ -296,9 +297,19 @@ function AdminPanel() {
       return res.value || "";
     },
   });
+  const { data: savedNotificationMessage } = useQuery({
+    queryKey: ["store-setting", "notification_message"],
+    queryFn: async () => {
+      const res = await getSettingFn({ data: { key: "notification_message" } });
+      return res.value || "";
+    },
+  });
   useEffect(() => {
     if (savedNotificationEmail !== undefined) setNotificationEmail(savedNotificationEmail);
   }, [savedNotificationEmail]);
+  useEffect(() => {
+    if (savedNotificationMessage !== undefined) setNotificationMessage(savedNotificationMessage);
+  }, [savedNotificationMessage]);
 
   const saveNotificationEmail = async () => {
     if (!/^\S+@\S+\.\S+$/.test(notificationEmail.trim())) {
@@ -310,8 +321,11 @@ function AdminPanel() {
       await updateSettingFn({
         data: { key: "notification_email", value: notificationEmail.trim() },
       });
-      qc.invalidateQueries({ queryKey: ["store-setting", "notification_email"] });
-      toast.success("E-mail de notificação atualizado!");
+      await updateSettingFn({
+        data: { key: "notification_message", value: notificationMessage },
+      });
+      qc.invalidateQueries({ queryKey: ["store-setting"] });
+      toast.success("Configurações de notificação atualizadas!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
