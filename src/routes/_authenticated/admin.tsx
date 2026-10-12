@@ -1110,6 +1110,33 @@ function AdminPanel() {
         </TabsContent>
 
         {/* ----------------- TAB: CLIENTES ----------------- */}
+        <TabsContent value="config" className="mt-6 space-y-6">
+          <div className="border bg-card p-6 max-w-xl">
+            <h3 className="font-display text-2xl">Notificações por e-mail</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              E-mail padrão da loja usado nas notificações de pedidos (remetente de contato e
+              destino alternativo quando o cliente não tem e-mail de cadastro).
+            </p>
+            <div className="mt-5 space-y-2">
+              <Label htmlFor="notification-email">E-mail de notificação</Label>
+              <Input
+                id="notification-email"
+                type="email"
+                placeholder="contato@elizalingerie.com.br"
+                value={notificationEmail}
+                onChange={(e) => setNotificationEmail(e.target.value)}
+              />
+            </div>
+            <Button
+              className="mt-4 rounded-none"
+              onClick={saveNotificationEmail}
+              disabled={savingSettings}
+            >
+              {savingSettings ? "Salvando…" : "Salvar configurações"}
+            </Button>
+          </div>
+        </TabsContent>
+
         <TabsContent value="clientes" className="mt-6 space-y-4">
           <div className="border bg-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
             <div>
