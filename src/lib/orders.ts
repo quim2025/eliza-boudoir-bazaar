@@ -44,7 +44,10 @@ export interface OrderNotificationEmailParams {
   shippingAddress?: Record<string, string>;
 }
 
-export function generateOrderNotificationEmail(params: OrderNotificationEmailParams): {
+export function generateOrderNotificationEmail(
+  params: OrderNotificationEmailParams,
+  customTemplate?: string,
+): {
   subject: string;
   body: string;
   whatsappMessage: string;
@@ -78,7 +81,21 @@ export function generateOrderNotificationEmail(params: OrderNotificationEmailPar
 
   const subject = `Atualização do seu pedido #${code} — Eliza Lingerie`;
 
-  const body = `Olá, ${params.customerName}! É um prazer falar com você.
+  // Modelo personalizado pelo admin (com variáveis) ou mensagem padrão
+  const template = customTemplate?.trim();
+  const body = template
+    ? template
+        .replaceAll("{nome}", params.customerName)
+        .replaceAll("{pedido}", `#${code}`)
+        .replaceAll("{status}", statusLabel)
+        .replaceAll("{rastreio}", tracking || "(será fornecido após o despacho)")
+        .replaceAll("{itens}", itemsList)
+        .replaceAll(
+          "{total}",
+          params.total ? `R$ ${Number(params.total).toFixed(2).replace(".", ",")}` : "",
+        )
+        .replaceAll("{endereco}", addressText.replace("Endereço de entrega:\n", ""))
+    : `Olá, ${params.customerName}! É um prazer falar com você.
 
 Temos novidades sobre a sua compra na Eliza Lingerie!
 
