@@ -406,8 +406,7 @@ function AdminPanel() {
           status: emailTargetStatus,
           trackingCode: emailTrackingCode.trim(),
           customerName: recipientName,
-          customerEmail:
-            addr["email"] || `cliente_${selectedOrderForEmail.id.slice(0, 5)}@email.com`,
+          customerEmail: addr["email"] || "",
           subject: emailDetails.subject,
           content: emailDetails.body,
         },
