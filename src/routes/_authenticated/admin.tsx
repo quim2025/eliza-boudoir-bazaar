@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -23,7 +23,11 @@ import {
   dateBR,
   generateOrderNotificationEmail,
 } from "@/lib/orders";
-import { sendOrderStatusEmail } from "@/lib/integrations.functions";
+import {
+  sendOrderStatusEmail,
+  getStoreSetting,
+  updateStoreSetting,
+} from "@/lib/integrations.functions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -207,6 +211,8 @@ export interface AdminOrderSummary {
 function AdminPanel() {
   const qc = useQueryClient();
   const sendEmailFn = useServerFn(sendOrderStatusEmail);
+  const getSettingFn = useServerFn(getStoreSetting);
+  const updateSettingFn = useServerFn(updateStoreSetting);
 
   // Queries
   const { data: orders = [] } = useQuery({
@@ -279,6 +285,39 @@ function AdminPanel() {
   // Search & Filters for Products
   const [productSearch, setProductSearch] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
+
+  // Store Settings (e-mail padrão de notificação)
+  const [notificationEmail, setNotificationEmail] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+  const { data: savedNotificationEmail } = useQuery({
+    queryKey: ["store-setting", "notification_email"],
+    queryFn: async () => {
+      const res = await getSettingFn({ data: { key: "notification_email" } });
+      return res.value || "";
+    },
+  });
+  useEffect(() => {
+    if (savedNotificationEmail !== undefined) setNotificationEmail(savedNotificationEmail);
+  }, [savedNotificationEmail]);
+
+  const saveNotificationEmail = async () => {
+    if (!/^\S+@\S+\.\S+$/.test(notificationEmail.trim())) {
+      toast.error("Informe um e-mail válido.");
+      return;
+    }
+    setSavingSettings(true);
+    try {
+      await updateSettingFn({
+        data: { key: "notification_email", value: notificationEmail.trim() },
+      });
+      qc.invalidateQueries({ queryKey: ["store-setting", "notification_email"] });
+      toast.success("E-mail de notificação atualizado!");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // Computed metrics
   const revenue = (orders ?? [])
@@ -510,6 +549,9 @@ function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="estoque" className="rounded-none px-4 py-2 font-medium">
             Estoque Rápido
+          </TabsTrigger>
+          <TabsTrigger value="config" className="rounded-none px-4 py-2 font-medium">
+            Configurações
           </TabsTrigger>
           <TabsTrigger value="clientes" className="rounded-none px-4 py-2 font-medium">
             Clientes ({customers.length})
@@ -1068,6 +1110,33 @@ function AdminPanel() {
         </TabsContent>
 
         {/* ----------------- TAB: CLIENTES ----------------- */}
+        <TabsContent value="config" className="mt-6 space-y-6">
+          <div className="border bg-card p-6 max-w-xl">
+            <h3 className="font-display text-2xl">Notificações por e-mail</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              E-mail padrão da loja usado nas notificações de pedidos (remetente de contato e
+              destino alternativo quando o cliente não tem e-mail de cadastro).
+            </p>
+            <div className="mt-5 space-y-2">
+              <Label htmlFor="notification-email">E-mail de notificação</Label>
+              <Input
+                id="notification-email"
+                type="email"
+                placeholder="contato@elizalingerie.com.br"
+                value={notificationEmail}
+                onChange={(e) => setNotificationEmail(e.target.value)}
+              />
+            </div>
+            <Button
+              className="mt-4 rounded-none"
+              onClick={saveNotificationEmail}
+              disabled={savingSettings}
+            >
+              {savingSettings ? "Salvando…" : "Salvar configurações"}
+            </Button>
+          </div>
+        </TabsContent>
+
         <TabsContent value="clientes" className="mt-6 space-y-4">
           <div className="border bg-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm">
             <div>

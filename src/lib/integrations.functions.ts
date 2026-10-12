@@ -275,6 +275,47 @@ export const createMercadoPagoPreference = createServerFn({ method: "POST" })
     return { url: pref.sandbox_init_point || pref.init_point, preferenceId: pref.id };
   });
 
+/** Lê uma configuração da loja (somente admin). */
+export const getStoreSetting = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { key: string }) => ({ key: String(d.key ?? "") }))
+  .handler(async ({ data, context }) => {
+    const { data: isAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (!isAdmin) throw new Error("Forbidden");
+    const { data: row } = await context.supabase
+      .from("store_settings")
+      .select("value")
+      .eq("key", data.key)
+      .maybeSingle();
+    return { key: data.key, value: row?.value ?? "" };
+  });
+
+/** Atualiza uma configuração da loja (somente admin). */
+export const updateStoreSetting = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { key: string; value: string }) => ({
+    key: String(d.key ?? ""),
+    value: String(d.value ?? "").trim(),
+  }))
+  .handler(async ({ data, context }) => {
+    const { data: isAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (!isAdmin) throw new Error("Forbidden");
+    if (data.key === "notification_email" && data.value && !/^\S+@\S+\.\S+$/.test(data.value)) {
+      throw new Error("E-mail inválido");
+    }
+    const { error } = await context.supabase
+      .from("store_settings")
+      .upsert({ key: data.key, value: data.value, updated_at: new Date().toISOString() });
+    if (error) throw new Error(error.message);
+    return { success: true };
+  });
+
 /** Envia notificação por e-mail quando o status da compra é modificado pelo admin. */
 export const sendOrderStatusEmail = createServerFn({ method: "POST" })
   .inputValidator(
@@ -294,6 +335,15 @@ export const sendOrderStatusEmail = createServerFn({ method: "POST" })
 
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+      // E-mail padrão de notificação configurável pelo admin (fallback de destino)
+      const { data: setting } = await supabaseAdmin
+        .from("store_settings")
+        .select("value")
+        .eq("key", "notification_email")
+        .maybeSingle();
+      const defaultNotificationEmail = (setting?.value || "").trim();
+
       const { data: order } = await supabaseAdmin
         .from("orders")
         .select("shipping_address, user_id")
@@ -305,6 +355,9 @@ export const sendOrderStatusEmail = createServerFn({ method: "POST" })
         const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(order.user_id);
         if (authUser?.user?.email) recipientEmail = authUser.user.email;
       }
+
+      // Se não foi possível obter o e-mail do cliente, usa o e-mail padrão da loja
+      if (!recipientEmail && defaultNotificationEmail) recipientEmail = defaultNotificationEmail;
 
       const addr = (order?.shipping_address as Record<string, unknown>) || {};
       const updatedAddress = {

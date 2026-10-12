@@ -15,6 +15,13 @@
       "when": 1791591380530,
       "tag": "0001_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791764413732,
+      "tag": "0002_store_settings",
+      "breakpoints": true
     }
   ]
 }
