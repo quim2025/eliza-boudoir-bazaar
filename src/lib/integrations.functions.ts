@@ -290,14 +290,21 @@ export const sendOrderStatusEmail = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const tracking = (data.trackingCode || "").trim();
+    let recipientEmail = (data.customerEmail || "").trim();
 
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: order } = await supabaseAdmin
         .from("orders")
-        .select("shipping_address")
+        .select("shipping_address, user_id")
         .eq("id", data.orderId)
         .maybeSingle();
+
+      // Sempre usa o e-mail de login (cadastro) do cliente como destinatário
+      if (order?.user_id) {
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(order.user_id);
+        if (authUser?.user?.email) recipientEmail = authUser.user.email;
+      }
 
       const addr = (order?.shipping_address as Record<string, unknown>) || {};
       const updatedAddress = {
