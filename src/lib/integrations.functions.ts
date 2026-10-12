@@ -326,14 +326,14 @@ export const sendOrderStatusEmail = createServerFn({ method: "POST" })
     }
 
     console.log(
-      `[Notificação de E-mail Enviada] Pedido: ${data.orderId} | Status: ${data.status} | Destinatário: ${data.customerEmail} (${data.customerName}) | Rastreio: ${tracking || "Sem rastreio"}`,
+      `[Notificação de E-mail Enviada] Pedido: ${data.orderId} | Status: ${data.status} | Destinatário: ${recipientEmail} (${data.customerName}) | Rastreio: ${tracking || "Sem rastreio"}`,
     );
 
     return {
       success: true,
       sentAt: new Date().toISOString(),
       trackingCode: tracking,
-      recipient: data.customerEmail ?? "",
+      recipient: recipientEmail,
       orderId: data.orderId,
       status: data.status,
     };
