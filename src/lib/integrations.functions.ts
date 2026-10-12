@@ -356,6 +356,9 @@ export const sendOrderStatusEmail = createServerFn({ method: "POST" })
         if (authUser?.user?.email) recipientEmail = authUser.user.email;
       }
 
+      // Se não foi possível obter o e-mail do cliente, usa o e-mail padrão da loja
+      if (!recipientEmail && defaultNotificationEmail) recipientEmail = defaultNotificationEmail;
+
       const addr = (order?.shipping_address as Record<string, unknown>) || {};
       const updatedAddress = {
         ...addr,
