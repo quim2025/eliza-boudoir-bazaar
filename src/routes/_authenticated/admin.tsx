@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
@@ -549,6 +549,9 @@ function AdminPanel() {
           </TabsTrigger>
           <TabsTrigger value="estoque" className="rounded-none px-4 py-2 font-medium">
             Estoque Rápido
+          </TabsTrigger>
+          <TabsTrigger value="config" className="rounded-none px-4 py-2 font-medium">
+            Configurações
           </TabsTrigger>
           <TabsTrigger value="clientes" className="rounded-none px-4 py-2 font-medium">
             Clientes ({customers.length})
