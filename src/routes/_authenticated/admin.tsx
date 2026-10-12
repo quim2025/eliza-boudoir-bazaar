@@ -23,7 +23,11 @@ import {
   dateBR,
   generateOrderNotificationEmail,
 } from "@/lib/orders";
-import { sendOrderStatusEmail } from "@/lib/integrations.functions";
+import {
+  sendOrderStatusEmail,
+  getStoreSetting,
+  updateStoreSetting,
+} from "@/lib/integrations.functions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
