@@ -335,6 +335,15 @@ export const sendOrderStatusEmail = createServerFn({ method: "POST" })
 
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+      // E-mail padrão de notificação configurável pelo admin (fallback de destino)
+      const { data: setting } = await supabaseAdmin
+        .from("store_settings")
+        .select("value")
+        .eq("key", "notification_email")
+        .maybeSingle();
+      const defaultNotificationEmail = (setting?.value || "").trim();
+
       const { data: order } = await supabaseAdmin
         .from("orders")
         .select("shipping_address, user_id")
