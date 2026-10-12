@@ -275,6 +275,47 @@ export const createMercadoPagoPreference = createServerFn({ method: "POST" })
     return { url: pref.sandbox_init_point || pref.init_point, preferenceId: pref.id };
   });
 
+/** Lê uma configuração da loja (somente admin). */
+export const getStoreSetting = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { key: string }) => ({ key: String(d.key ?? "") }))
+  .handler(async ({ data, context }) => {
+    const { data: isAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (!isAdmin) throw new Error("Forbidden");
+    const { data: row } = await context.supabase
+      .from("store_settings")
+      .select("value")
+      .eq("key", data.key)
+      .maybeSingle();
+    return { key: data.key, value: row?.value ?? "" };
+  });
+
+/** Atualiza uma configuração da loja (somente admin). */
+export const updateStoreSetting = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { key: string; value: string }) => ({
+    key: String(d.key ?? ""),
+    value: String(d.value ?? "").trim(),
+  }))
+  .handler(async ({ data, context }) => {
+    const { data: isAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
+    if (!isAdmin) throw new Error("Forbidden");
+    if (data.key === "notification_email" && data.value && !/^\S+@\S+\.\S+$/.test(data.value)) {
+      throw new Error("E-mail inválido");
+    }
+    const { error } = await context.supabase
+      .from("store_settings")
+      .upsert({ key: data.key, value: data.value, updated_at: new Date().toISOString() });
+    if (error) throw new Error(error.message);
+    return { success: true };
+  });
+
 /** Envia notificação por e-mail quando o status da compra é modificado pelo admin. */
 export const sendOrderStatusEmail = createServerFn({ method: "POST" })
   .inputValidator(
