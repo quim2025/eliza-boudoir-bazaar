@@ -286,8 +286,9 @@ function AdminPanel() {
   const [productSearch, setProductSearch] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
 
-  // Store Settings (e-mail padrão de notificação)
+  // Store Settings (e-mail remetente + modelo da mensagem de notificação)
   const [notificationEmail, setNotificationEmail] = useState("");
+  const [notificationMessage, setNotificationMessage] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const { data: savedNotificationEmail } = useQuery({
     queryKey: ["store-setting", "notification_email"],
@@ -296,9 +297,19 @@ function AdminPanel() {
       return res.value || "";
     },
   });
+  const { data: savedNotificationMessage } = useQuery({
+    queryKey: ["store-setting", "notification_message"],
+    queryFn: async () => {
+      const res = await getSettingFn({ data: { key: "notification_message" } });
+      return res.value || "";
+    },
+  });
   useEffect(() => {
     if (savedNotificationEmail !== undefined) setNotificationEmail(savedNotificationEmail);
   }, [savedNotificationEmail]);
+  useEffect(() => {
+    if (savedNotificationMessage !== undefined) setNotificationMessage(savedNotificationMessage);
+  }, [savedNotificationMessage]);
 
   const saveNotificationEmail = async () => {
     if (!/^\S+@\S+\.\S+$/.test(notificationEmail.trim())) {
@@ -310,8 +321,11 @@ function AdminPanel() {
       await updateSettingFn({
         data: { key: "notification_email", value: notificationEmail.trim() },
       });
-      qc.invalidateQueries({ queryKey: ["store-setting", "notification_email"] });
-      toast.success("E-mail de notificação atualizado!");
+      await updateSettingFn({
+        data: { key: "notification_message", value: notificationMessage },
+      });
+      qc.invalidateQueries({ queryKey: ["store-setting"] });
+      toast.success("Configurações de notificação atualizadas!");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
     } finally {
@@ -436,7 +450,7 @@ function AdminPanel() {
       items: selectedOrderForEmail.order_items ?? [],
       total: Number(selectedOrderForEmail.total),
       shippingAddress: addr,
-    });
+    }, notificationMessage || undefined);
 
     try {
       await sendEmailFn({
@@ -1114,18 +1128,33 @@ function AdminPanel() {
           <div className="border bg-card p-6 max-w-xl">
             <h3 className="font-display text-2xl">Notificações por e-mail</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              E-mail padrão da loja usado nas notificações de pedidos (remetente de contato e
-              destino alternativo quando o cliente não tem e-mail de cadastro).
+              As notificações de pedido são sempre enviadas para o e-mail de login do cliente.
+              Aqui você define o remetente e o texto padrão da mensagem.
             </p>
             <div className="mt-5 space-y-2">
-              <Label htmlFor="notification-email">E-mail de notificação</Label>
+              <Label htmlFor="notification-email">E-mail remetente (admin)</Label>
               <Input
                 id="notification-email"
                 type="email"
-                placeholder="contato@elizalingerie.com.br"
+                placeholder="seu-email@exemplo.com"
                 value={notificationEmail}
                 onChange={(e) => setNotificationEmail(e.target.value)}
               />
+            </div>
+            <div className="mt-5 space-y-2">
+              <Label htmlFor="notification-message">Mensagem padrão de notificação</Label>
+              <Textarea
+                id="notification-message"
+                rows={10}
+                placeholder="Deixe em branco para usar a mensagem padrão da loja."
+                value={notificationMessage}
+                onChange={(e) => setNotificationMessage(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Variáveis disponíveis: {"{nome}"}, {"{pedido}"}, {"{status}"}, {"{rastreio}"},{" "}
+                {"{itens}"}, {"{total}"}, {"{endereco}"}. Deixe em branco para usar o texto
+                padrão.
+              </p>
             </div>
             <Button
               className="mt-4 rounded-none"
@@ -1430,7 +1459,7 @@ function AdminPanel() {
                   items: selectedOrderForEmail.order_items ?? [],
                   total: Number(selectedOrderForEmail.total),
                   shippingAddress: addr,
-                });
+                }, notificationMessage || undefined);
 
                 return (
                   <div className="border bg-muted/40 p-3 sm:p-4 rounded-sm space-y-2">
